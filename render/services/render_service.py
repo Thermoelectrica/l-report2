@@ -12,7 +12,7 @@ from sqlalchemy import select, and_
 from ..database import AsyncSessionLocal
 from ..database.models import Render
 from ..models import RenderStatus, RenderResult, ReportListItem, ReportMetadata
-from ..service.interface import RenderService as RenderServiceInterface
+from .interface import RenderService as RenderServiceInterface
 from ..storage import get_storage
 from .repository import repository
 from .query_executor import query_executor
