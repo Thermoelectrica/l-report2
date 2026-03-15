@@ -97,7 +97,8 @@ class QueryExecutor:
             Tuple of (converted_query, positional_params_list)
         """
         # Find all named parameters in the query (e.g., :schema_name)
-        named_params_in_query = re.findall(r":(\w+)", query)
+        # Exclude PostgreSQL type casts (::type) by using negative lookbehind
+        named_params_in_query = re.findall(r"(?<!:):(\w+)", query)
 
         # If no named parameters found, assume positional parameters already
         # and use metadata order
@@ -151,9 +152,10 @@ class QueryExecutor:
         # Replace named parameters with positional ones
         converted_query = query
         for param_name, position in param_mapping.items():
-            # Use word boundaries to avoid partial replacements
+            # Use word boundaries and negative lookbehind to avoid partial replacements
+            # and PostgreSQL type casts (::type)
             converted_query = re.sub(
-                rf":{param_name}\b", f"${position}", converted_query
+                rf"(?<!:):{param_name}\b", f"${position}", converted_query
             )
 
         return converted_query, positional_params
