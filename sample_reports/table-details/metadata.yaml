@@ -1,0 +1,16 @@
+name: "Table Details Report"
+description: "Detailed information about a specific database table including columns, indexes, and constraints"
+version: "1.0"
+timeout: 120
+
+parameters:
+  - name: schema_name
+    type: string
+    required: false
+    description: "Schema name (default: public)"
+    default: "public"
+  
+  - name: table_name
+    type: string
+    required: true
+    description: "Name of the table to analyze"

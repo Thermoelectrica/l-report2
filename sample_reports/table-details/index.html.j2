@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ globals.report_name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 28px;
+        }
+        
+        .metadata {
+            color: #7f8c8d;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+        
+        .section h2 {
+            color: #34495e;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        
+        .parameters {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .parameters dt {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-top: 10px;
+        }
+        
+        .parameters dd {
+            margin-left: 20px;
+            color: #555;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .info-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .info-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            font-weight: normal;
+            opacity: 0.9;
+        }
+        
+        .info-card .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+        
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ddd;
+            word-break: break-word;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        tr:hover {
+            background-color: #e8f4f8;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .badge-yes {
+            background-color: #27ae60;
+            color: white;
+        }
+        
+        .badge-no {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        .badge-pk {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .code {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ globals.report_name }}</h1>
+        <div class="metadata">
+            Generated: {{ globals.generated_at }}<br>
+            Version: {{ globals.version }}
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Report Parameters</h2>
+        <div class="parameters">
+            <dl>
+                <dt>Schema:</dt>
+                <dd>{{ params.schema_name or 'public' }}</dd>
+                <dt>Table:</dt>
+                <dd><strong>{{ params.table_name }}</strong></dd>
+            </dl>
+        </div>
+    </div>
+    
+    {% if queries.table_info %}
+    <div class="section">
+        <h2>Table Information</h2>
+        
+        {% for row in queries.table_info %}
+        <div class="info-grid">
+            <div class="info-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h3>Owner</h3>
+                <div class="value" style="font-size: 18px;">{{ row.owner }}</div>
+            </div>
+            
+            <div class="info-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <h3>Total Size</h3>
+                <div class="value">{{ row.total_size }}</div>
+            </div>
+            
+            <div class="info-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <h3>Table Size</h3>
+                <div class="value">{{ row.table_size }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    {% if queries.row_stats %}
+    <div class="section">
+        <h2>Row Statistics</h2>
+        
+        {% for row in queries.row_stats %}
+        <div class="info-grid">
+            <div class="info-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                <h3>Live Rows</h3>
+                <div class="value">{{ row.live_rows | format_number }}</div>
+            </div>
+            
+            <div class="info-card" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);">
+                <h3>Dead Rows</h3>
+                <div class="value">{{ row.dead_rows | format_number }}</div>
+            </div>
+            
+            <div class="info-card" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+                <h3>Total Operations</h3>
+                <div class="value">{{ (row.inserts + row.updates + row.deletes) | format_number }}</div>
+            </div>
+        </div>
+        
+        <table style="margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th class="text-right">Count</th>
+                    <th>Last Occurrence</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Inserts</td>
+                    <td class="text-right">{{ row.inserts | format_number }}</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Updates</td>
+                    <td class="text-right">{{ row.updates | format_number }}</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Deletes</td>
+                    <td class="text-right">{{ row.deletes | format_number }}</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Vacuum</td>
+                    <td class="text-right">{{ row.vacuum_count }}</td>
+                    <td>{{ row.last_vacuum or row.last_autovacuum or 'Never' }}</td>
+                </tr>
+                <tr>
+                    <td>Analyze</td>
+                    <td class="text-right">{{ row.analyze_count }}</td>
+                    <td>{{ row.last_analyze or row.last_autoanalyze or 'Never' }}</td>
+                </tr>
+            </tbody>
+        </table>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    {% if queries.columns %}
+    <div class="section">
+        <h2>Columns ({{ queries.columns | length }})</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Position</th>
+                    <th>Column Name</th>
+                    <th>Data Type</th>
+                    <th class="text-center">Nullable</th>
+                    <th class="text-center">Primary Key</th>
+                    <th>Default</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in queries.columns %}
+                <tr>
+                    <td class="text-center">{{ row.position }}</td>
+                    <td><strong>{{ row.column_name }}</strong></td>
+                    <td>{{ row.full_type }}</td>
+                    <td class="text-center">
+                        {% if row.is_nullable == 'YES' %}
+                        <span class="badge badge-yes">YES</span>
+                        {% else %}
+                        <span class="badge badge-no">NO</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if row.is_primary_key == 'YES' %}
+                        <span class="badge badge-pk">PK</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.column_default or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if queries.indexes %}
+    <div class="section">
+        <h2>Indexes ({{ queries.indexes | length }})</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Index Name</th>
+                    <th>Size</th>
+                    <th>Definition</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in queries.indexes %}
+                <tr>
+                    <td><strong>{{ row.index_name }}</strong></td>
+                    <td>{{ row.index_size }}</td>
+                    <td><div class="code">{{ row.definition }}</div></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if queries.constraints %}
+    <div class="section">
+        <h2>Constraints ({{ queries.constraints | length }})</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Constraint Name</th>
+                    <th>Type</th>
+                    <th>Definition</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in queries.constraints %}
+                <tr>
+                    <td><strong>{{ row.constraint_name }}</strong></td>
+                    <td>{{ row.constraint_type }}</td>
+                    <td><div class="code">{{ row.definition }}</div></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <div class="footer">
+        <p>This report was automatically generated by the Reporting Service</p>
+        <p>Report ID: {{ globals.template_name }} | Generated: {{ globals.generated_at }}</p>
+    </div>
+</body>
+</html>

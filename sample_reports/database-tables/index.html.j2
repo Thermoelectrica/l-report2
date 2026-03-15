@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ globals.report_name }}</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 1.5cm;
+        }
+        
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 28px;
+        }
+        
+        .metadata {
+            color: #7f8c8d;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+        
+        .section h2 {
+            color: #34495e;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        
+        .parameters {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .parameters dt {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-top: 10px;
+        }
+        
+        .parameters dd {
+            margin-left: 20px;
+            color: #555;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+        
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        tr:hover {
+            background-color: #e8f4f8;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 11px;
+        }
+        
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        
+        .summary-box .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ globals.report_name }}</h1>
+        <div class="metadata">
+            Generated: {{ globals.generated_at }}<br>
+            Version: {{ globals.version }}
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Report Parameters</h2>
+        <div class="parameters">
+            <dl>
+                <dt>Schema:</dt>
+                <dd>{{ params.schema_name or 'public' }}</dd>
+            </dl>
+        </div>
+    </div>
+    
+    {% if queries.tables_list %}
+    <div class="section">
+        <h2>Database Tables</h2>
+        
+        <div class="summary-box">
+            <h3>Total Tables</h3>
+            <div class="value">{{ queries.tables_list | length }}</div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Schema</th>
+                    <th>Table Name</th>
+                    <th class="text-right">Total Size</th>
+                    <th class="text-right">Table Size</th>
+                    <th class="text-right">Indexes Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in queries.tables_list %}
+                <tr>
+                    <td>{{ row.schema_name }}</td>
+                    <td><strong>{{ row.table_name }}</strong></td>
+                    <td class="text-right">{{ row.total_size }}</td>
+                    <td class="text-right">{{ row.table_size }}</td>
+                    <td class="text-right">{{ row.indexes_size }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if queries.table_stats %}
+    <div class="section">
+        <h2>Table Statistics</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Schema</th>
+                    <th>Table Name</th>
+                    <th class="text-right">Estimated Rows</th>
+                    <th class="text-right">Dead Rows</th>
+                    <th>Last Vacuum</th>
+                    <th>Last Analyze</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in queries.table_stats %}
+                <tr>
+                    <td>{{ row.schema_name }}</td>
+                    <td><strong>{{ row.table_name }}</strong></td>
+                    <td class="text-right">{{ row.estimated_rows | format_number }}</td>
+                    <td class="text-right">{{ row.dead_rows | format_number }}</td>
+                    <td class="text-center">{{ row.last_vacuum or row.last_autovacuum or 'Never' }}</td>
+                    <td class="text-center">{{ row.last_analyze or row.last_autoanalyze or 'Never' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <div class="footer">
+        <p>This report was automatically generated by the Reporting Service</p>
+        <p>Report ID: {{ globals.template_name }} | Generated: {{ globals.generated_at }}</p>
+    </div>
+</body>
+</html>
