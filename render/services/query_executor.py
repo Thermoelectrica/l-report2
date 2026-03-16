@@ -100,20 +100,9 @@ class QueryExecutor:
         # Exclude PostgreSQL type casts (::type) by using negative lookbehind
         named_params_in_query = re.findall(r"(?<!:):(\w+)", query)
 
-        # If no named parameters found, assume positional parameters already
-        # and use metadata order
+        # If no named parameters found, return query as-is with no parameters
         if not named_params_in_query:
-            positional_params = []
-            if metadata.parameters:
-                for param_def in metadata.parameters:
-                    param_name = param_def.name
-                    if param_name in parameters:
-                        positional_params.append(parameters[param_name])
-                    elif param_def.default is not None:
-                        positional_params.append(param_def.default)
-                    elif not param_def.required:
-                        positional_params.append(None)
-            return query, positional_params
+            return query, []
 
         # Build parameter mapping and values list
         param_mapping = {}  # Maps parameter name to position number
