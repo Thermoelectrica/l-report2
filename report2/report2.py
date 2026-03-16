@@ -95,11 +95,14 @@ class State(rx.State):
             logger.error(f"Error loading reports: {e}", exc_info=True)
 
     @rx.event
-    def select_report(self, report_id: str):
+    async def select_report(self, report_id: str):
         """Select a report and load its metadata."""
         try:
+            # Ensure services are initialized
+            await ensure_services_initialized()
+            
             self.selected_report_id = report_id
-            metadata = render_service.getReportMetadata(report_id)
+            metadata = await render_service.getReportMetadata(report_id)
             
             # Store metadata in separate fields
             self.selected_report_name = metadata.name

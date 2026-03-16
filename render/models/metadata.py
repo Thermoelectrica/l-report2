@@ -36,6 +36,7 @@ class ReportParameter(BaseModel):
         required: Whether this parameter must be provided
         description: Optional human-readable description for UI display
         enum: Optional list of allowed values (for dropdown/select inputs)
+        enum_query: Optional SQL query file name to fetch enum values dynamically
         default: Optional default value if parameter is not provided
         
     Example:
@@ -60,6 +61,10 @@ class ReportParameter(BaseModel):
     enum: Optional[List[Any]] = Field(
         default=None,
         description="List of allowed values (for constrained inputs)"
+    )
+    enum_query: Optional[str] = Field(
+        default=None,
+        description="SQL query file name to fetch enum values dynamically from database"
     )
     default: Optional[Any] = Field(
         default=None,

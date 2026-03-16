@@ -84,6 +84,69 @@ class QueryExecutor:
 
         return results
 
+    async def execute_enum_query(
+        self, query_file: Path, parameters: Dict[str, Any] | None = None
+    ) -> List[Any]:
+        """
+        Execute a SQL query to fetch enum values.
+
+        Args:
+            query_file: Path to SQL query file
+            parameters: Optional parameters for query binding
+
+        Returns:
+            List of values from the first column of query results
+        """
+        if not self.pool:
+            raise RuntimeError(
+                "Query executor not initialized. Call initialize() first."
+            )
+
+        # Read query
+        with open(query_file, "r", encoding="utf-8") as f:
+            query = f.read()
+
+        logger.info(f"Executing enum query: {query_file.name}")
+
+        # Execute query with a short timeout (enum queries should be fast)
+        timeout = 10  # 10 seconds for enum queries
+        
+        async with self.pool.acquire() as conn:
+            try:
+                # Set statement timeout
+                await conn.execute(f"SET statement_timeout = {timeout * 1000}")
+
+                # Execute query (enum queries typically don't need parameters)
+                if parameters:
+                    # Convert named parameters to positional if needed
+                    # For enum queries, we create a minimal metadata object
+                    from ..models import ReportMetadata
+                    minimal_metadata = ReportMetadata(id="enum", name="enum", parameters=[])
+                    converted_query, positional_params = self._convert_named_to_positional(
+                        query, parameters, minimal_metadata
+                    )
+                    rows = await conn.fetch(converted_query, *positional_params)
+                else:
+                    rows = await conn.fetch(query)
+
+                # Extract first column values
+                if rows:
+                    # Get the first column name
+                    first_column = list(rows[0].keys())[0]
+                    return [row[first_column] for row in rows]
+                else:
+                    return []
+
+            except asyncpg.QueryCanceledError:
+                logger.error(f"Enum query execution timeout after {timeout} seconds")
+                raise TimeoutError(f"Enum query execution exceeded {timeout} seconds")
+            except asyncpg.PostgresError as e:
+                logger.error(f"Database error in enum query: {e}")
+                raise RuntimeError(f"Enum query execution failed: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error during enum query execution: {e}")
+                raise
+
     def _convert_default_value(self, value: Any, param_type: ParameterType) -> Any:
         """
         Convert default value from metadata to proper Python type.

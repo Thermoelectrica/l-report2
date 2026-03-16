@@ -38,12 +38,13 @@ class RenderService(ABC):
         pass
 
     @abstractmethod
-    def getReportMetadata(self, report_id: str) -> ReportMetadata:
+    async def getReportMetadata(self, report_id: str) -> ReportMetadata:
         """Get detailed metadata for a specific report.
         
         Provides comprehensive information about a report including its parameters,
         description, version, and timeout settings. Use this to build dynamic forms
-        for parameter input.
+        for parameter input. If parameters have enum_query defined, the enum values
+        will be dynamically fetched from the database.
         
         Args:
             report_id: Unique identifier of the report
@@ -51,12 +52,13 @@ class RenderService(ABC):
         Returns:
             ReportMetadata object containing full report details including
             parameter definitions with types, validation rules, and defaults.
+            Dynamic enum values are resolved from database queries.
             
         Raises:
             ValueError: If report_id does not exist
             
         Example:
-            >>> metadata = service.getReportMetadata("sales-report")
+            >>> metadata = await service.getReportMetadata("sales-report")
             >>> for param in metadata.parameters:
             ...     print(f"{param.name}: {param.type} (required={param.required})")
         """

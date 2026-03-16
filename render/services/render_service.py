@@ -6,12 +6,13 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
+from copy import deepcopy
 
 from sqlalchemy import select, and_
 
 from ..database import AsyncSessionLocal
 from ..database.models import Render
-from ..models import RenderStatus, RenderResult, ReportListItem, ReportMetadata
+from ..models import RenderStatus, RenderResult, ReportListItem, ReportMetadata, ReportParameter
 from .interface import RenderService as RenderServiceInterface
 from ..storage import get_storage
 from .repository import repository
@@ -56,9 +57,55 @@ class RenderServiceImpl(RenderServiceInterface):
         """Get list of all available reports."""
         return repository.list_reports()
 
-    def getReportMetadata(self, report_id: str) -> ReportMetadata:
-        """Get detailed metadata for a specific report."""
-        return repository.get_metadata(report_id)
+    async def getReportMetadata(self, report_id: str) -> ReportMetadata:
+        """Get detailed metadata for a specific report with resolved dynamic enums."""
+        # Get base metadata from repository
+        metadata = repository.get_metadata(report_id)
+        report = repository.get_report(report_id)
+        
+        # Create a deep copy to avoid modifying the cached metadata
+        metadata_copy = deepcopy(metadata)
+        
+        # Resolve dynamic enums only if query executor is initialized
+        if query_executor.pool is None:
+            logger.warning(
+                "Query executor not initialized. Dynamic enums will not be resolved. "
+                "Call query_executor.initialize() first."
+            )
+            return metadata_copy
+        
+        logger.info(f"Resolving dynamic enums for report: {report_id}")
+        
+        # Resolve dynamic enums
+        for param in metadata_copy.parameters:
+            if param.enum_query:
+                logger.info(f"Found enum_query '{param.enum_query}' for parameter '{param.name}'")
+                # Find the query file
+                query_file = report.path / param.enum_query
+                
+                if not query_file.exists():
+                    logger.warning(
+                        f"Enum query file not found: {param.enum_query} for parameter {param.name} "
+                        f"(looked in {query_file})"
+                    )
+                    continue
+                
+                try:
+                    # Execute the enum query
+                    logger.info(f"Executing enum query from {query_file}")
+                    enum_values = await query_executor.execute_enum_query(query_file)
+                    param.enum = enum_values
+                    logger.info(
+                        f"Resolved {len(enum_values)} enum values for parameter {param.name}: {enum_values[:5]}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to execute enum query for parameter {param.name}: {e}",
+                        exc_info=True
+                    )
+                    # Keep the parameter without enum values
+        
+        return metadata_copy
 
     async def getRenderStatus(self, report_id: str, params: Dict[str, Any]) -> RenderResult:
         """Get the current status and result of a report rendering."""

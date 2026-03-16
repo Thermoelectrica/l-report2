@@ -89,6 +89,7 @@ class ReportRepository:
                     required=param.get("required", False),
                     description=param.get("description"),
                     enum=param.get("enum"),
+                    enum_query=param.get("enum_query"),
                     default=param.get("default"),
                 )
             )
