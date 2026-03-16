@@ -254,60 +254,101 @@ def report_list_item(report: Dict[str, str]) -> rx.Component:
 
 def parameter_input(param: ParamInfo) -> rx.Component:
     """Render input field for a parameter based on its type."""
-    # Label with required indicator and type hint
-    label = rx.hstack(
-        rx.text(
-            param.description,
-            size="2",
-            weight="medium",
+    # Label with required indicator
+    label = rx.box(
+        rx.hstack(
+            rx.cond(
+                param.required,
+                rx.text(
+                    "*",
+                    size="2",
+                    color="red",
+                    weight="bold",
+                ),
+                rx.fragment(),
+            ),
+            rx.text(
+                param.description,
+                size="2",
+                weight="medium",
+                align="right",
+            ),
+            spacing="1",
+        ),
+        width="50%",
+        display="flex",
+        align_items="center",
+        justify_content="flex-end",
+        padding_right="8px",
+    )
+    
+    input_field = rx.match(
+        param.type,
+        (
+            ParameterType.DATE.value,
+            rx.input(
+                name=param.name,
+                default_value=param.default_value,
+                placeholder=f"Enter {param.name}",
+                type="date",
+                required=param.required
+            )
+        ),
+        (
+            ParameterType.DATETIME.value,
+            rx.input(
+                name=param.name,
+                default_value=param.default_value,
+                placeholder=f"Enter {param.name}",
+                type="datetime-local",
+                required=param.required
+            )
+        ),
+        (
+            ParameterType.INTEGER.value, 
+            ParameterType.FLOAT.value,
+            rx.input(
+                name=param.name,
+                default_value=param.default_value,
+                placeholder=f"Enter {param.name}",
+                type="number",
+                required=param.required
+            )
+        ),
+        (
+            ParameterType.BOOLEAN.value,
+            rx.switch(
+                name=param.name,
+                default_checked=rx.cond(param.default_value == "True", True, False),
+            )
         ),
         rx.cond(
-            param.required,
-            rx.badge("Required", color_scheme="red", size="1"),
-            rx.fragment(),
-        ),
-        rx.badge(param.type, size="1", variant="soft"),
-        spacing="2",
-    )
-    
-    # Build input field based on type
-    input_field = rx.cond(
-        param.enum_values,
-        # Dropdown for enum values
-        rx.select(
             param.enum_values,
-            name=param.name,
-            default_value=param.default_value,
-            placeholder=f"Select {param.name}",
-        ),
-        # Input field based on type
-        rx.input(
-            name=param.name,
-            default_value=param.default_value,
-            placeholder=f"Enter {param.name}",
-            type=rx.cond(
-                param.type == ParameterType.DATE.value,
-                "date",
-                rx.cond(
-                    param.type == ParameterType.DATETIME.value,
-                    "datetime-local",
-                    rx.cond(
-                        (param.type == ParameterType.INTEGER.value) | (param.type == ParameterType.FLOAT.value),
-                        "number",
-                        "text",
-                    ),
-                ),
+            # Dropdown for enum values
+            rx.select(
+                param.enum_values,
+                name=param.name,
+                default_value=param.default_value,
+                placeholder=f"Select {param.name}",
             ),
-            required=param.required,
-        ),
+            # Plain text box
+            rx.input(
+                name=param.name,
+                default_value=param.default_value,
+                placeholder=f"Enter {param.name}",
+                type="text",
+                width="48%",
+                required=param.required
+            )
+        )
     )
     
-    return rx.vstack(
+    return rx.hstack(
         label,
         input_field,
         spacing="2",
-        align_items="start",
         width="100%",
+        align_items="center",
     )
 
 
@@ -372,6 +413,7 @@ def report_details_panel() -> rx.Component:
                     State.render_status,
                     icon="info",
                     color_scheme="blue",
+                    width="100%",
                 ),
                 rx.fragment(),
             ),
@@ -383,6 +425,7 @@ def report_details_panel() -> rx.Component:
                     State.render_error,
                     icon="alert-triangle",
                     color_scheme="red",
+                    width="100%",
                 ),
                 rx.fragment(),
             ),
@@ -421,7 +464,7 @@ def index() -> rx.Component:
             ),
             
             # Two-column layout
-            rx.grid(
+            rx.hstack(
                 # Left column - Report list
                 rx.box(
                     rx.vstack(
@@ -446,6 +489,7 @@ def index() -> rx.Component:
                     background="var(--gray-1)",
                     height="600px",
                     overflow_y="auto",
+                    width="30%"
                 ),
                 
                 # Right column - Report details and form
@@ -457,19 +501,19 @@ def index() -> rx.Component:
                     background="var(--gray-1)",
                     height="600px",
                     overflow_y="auto",
+                    width="70%"
                 ),
                 
-                columns="2",
                 spacing="4",
                 width="100%",
             ),
             
             spacing="5",
             width="100%",
-            max_width="1400px",
             padding="20px",
         ),
         on_mount=State.load_reports,
+        size="4",
     )
 
 
