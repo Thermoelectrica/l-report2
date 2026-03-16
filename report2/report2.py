@@ -440,15 +440,33 @@ def report_details_panel() -> rx.Component:
                 ),
                 on_submit=State.handle_submit,
                 width="100%",
+                key=State.selected_report_id,
+                reset_on_submit=False,
             ),
             
-            # Status display
+            # Status display (only show if no error)
             rx.cond(
-                State.render_status != "",
+                (State.render_status != "") & (State.render_error == ""),
                 rx.callout(
                     State.render_status,
-                    icon="info",
-                    color_scheme="blue",
+                    icon=rx.cond(
+                        State.render_status == "Completed!",
+                        "check-circle",
+                        rx.cond(
+                            State.is_rendering,
+                            "loader",
+                            "info"
+                        )
+                    ),
+                    color_scheme=rx.cond(
+                        State.render_status == "Completed!",
+                        "green",
+                        rx.cond(
+                            State.render_status == "Failed",
+                            "red",
+                            "blue"
+                        )
+                    ),
                     width="100%",
                 ),
                 rx.fragment(),
