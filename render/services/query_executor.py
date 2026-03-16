@@ -4,12 +4,14 @@ import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from datetime import datetime
 
 import asyncpg
 import pandas as pd
 
 from ..config import settings
 from .repository import Report
+from ..models import ParameterType
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,49 @@ class QueryExecutor:
 
         return results
 
+    def _convert_default_value(self, value: Any, param_type: ParameterType) -> Any:
+        """
+        Convert default value from metadata to proper Python type.
+        
+        Args:
+            value: Default value from metadata (usually a string)
+            param_type: Parameter type definition
+            
+        Returns:
+            Properly typed value
+        """
+        if value is None:
+            return None
+            
+        # If already the correct type, return as-is
+        if param_type == ParameterType.STRING:
+            return str(value)
+        elif param_type == ParameterType.INTEGER:
+            return int(value) if not isinstance(value, int) else value
+        elif param_type == ParameterType.FLOAT:
+            return float(value) if not isinstance(value, float) else value
+        elif param_type == ParameterType.BOOLEAN:
+            if isinstance(value, bool):
+                return value
+            # Convert string to boolean
+            return str(value).lower() in ("true", "1", "yes", "on")
+        elif param_type == ParameterType.DATE:
+            if isinstance(value, str):
+                return datetime.strptime(value, "%Y-%m-%d").date()
+            return value
+        elif param_type == ParameterType.DATETIME:
+            if isinstance(value, str):
+                # Try different datetime formats
+                for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S"]:
+                    try:
+                        return datetime.strptime(value, fmt)
+                    except ValueError:
+                        continue
+                raise ValueError(f"Unable to parse datetime: {value}")
+            return value
+        
+        return value
+
     def _convert_named_to_positional(
         self, query: str, parameters: Dict[str, Any], metadata: Any
     ) -> Tuple[str, List[Any]]:
@@ -127,7 +172,8 @@ class QueryExecutor:
             if param_name in parameters:
                 value = parameters[param_name]
             elif param_def and param_def.default is not None:
-                value = param_def.default
+                # Convert default value to proper type
+                value = self._convert_default_value(param_def.default, param_def.type)
             elif param_def and not param_def.required:
                 value = None
             else:

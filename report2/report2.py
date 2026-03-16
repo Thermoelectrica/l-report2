@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 import asyncio
 import base64
 import logging
+from datetime import datetime, date
 
 from rxconfig import config
 from render.services.render_service import render_service
@@ -209,7 +210,14 @@ class State(rx.State):
             param_type = param_def.type
             value_str = form_data.get(param_name, "")
             
-            # Skip empty non-required params
+            # Special handling for boolean - always include it (switch can be on/off)
+            if param_type == ParameterType.BOOLEAN.value:
+                # If value_str is truthy (switch is on), it will be "on" or "true"
+                # If switch is off, value_str will be empty string
+                typed_params[param_name] = value_str.lower() in ("true", "1", "yes", "on") if value_str else False
+                continue
+            
+            # Skip empty non-required params (except boolean which is handled above)
             if not value_str and not param_def.required:
                 continue
             
@@ -218,13 +226,21 @@ class State(rx.State):
                 if param_type == ParameterType.STRING.value:
                     typed_params[param_name] = value_str
                 elif param_type == ParameterType.INTEGER.value:
-                    typed_params[param_name] = int(value_str) if value_str else 0
+                    if value_str:
+                        # Convert to float first, then to int to handle decimal inputs
+                        typed_params[param_name] = int(float(value_str))
+                    else:
+                        typed_params[param_name] = 0
                 elif param_type == ParameterType.FLOAT.value:
                     typed_params[param_name] = float(value_str) if value_str else 0.0
-                elif param_type == ParameterType.BOOLEAN.value:
-                    typed_params[param_name] = value_str.lower() in ("true", "1", "yes", "on")
-                elif param_type in (ParameterType.DATE.value, ParameterType.DATETIME.value):
-                    typed_params[param_name] = value_str
+                elif param_type == ParameterType.DATE.value:
+                    # Convert date string (YYYY-MM-DD) to date object
+                    if value_str:
+                        typed_params[param_name] = datetime.strptime(value_str, "%Y-%m-%d").date()
+                elif param_type == ParameterType.DATETIME.value:
+                    # Convert datetime string (YYYY-MM-DDTHH:MM) to datetime object
+                    if value_str:
+                        typed_params[param_name] = datetime.strptime(value_str, "%Y-%m-%dT%H:%M")
             except ValueError as e:
                 raise ValueError(f"Invalid value for {param_name}: {e}")
         
@@ -305,13 +321,33 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             )
         ),
         (
-            ParameterType.INTEGER.value, 
+            ParameterType.INTEGER.value,
+            rx.hstack(
+                rx.input(
+                    name=param.name,
+                    default_value=param.default_value,
+                    placeholder=f"Enter {param.name}",
+                    type="number",
+                    step="1",
+                    required=param.required,
+                ),
+                rx.badge(
+                    "Integer only",
+                    color_scheme="blue",
+                    variant="soft",
+                ),
+                spacing="2",
+                align_items="center",
+            )
+        ),
+        (
             ParameterType.FLOAT.value,
             rx.input(
                 name=param.name,
                 default_value=param.default_value,
                 placeholder=f"Enter {param.name}",
                 type="number",
+                step="any",
                 required=param.required
             )
         ),
@@ -487,7 +523,6 @@ def index() -> rx.Component:
                     border_radius="12px",
                     border="1px solid var(--gray-5)",
                     background="var(--gray-1)",
-                    height="600px",
                     overflow_y="auto",
                     width="30%"
                 ),
@@ -499,7 +534,6 @@ def index() -> rx.Component:
                     border_radius="12px",
                     border="1px solid var(--gray-5)",
                     background="var(--gray-1)",
-                    height="600px",
                     overflow_y="auto",
                     width="70%"
                 ),
