@@ -76,7 +76,6 @@ class State(rx.State):
     render_error: str = ""
     is_rendering: bool = False
     pdf_ready: bool = False
-    pdf_data: str = ""  # Base64 encoded PDF
     
     # Current render params (for background task)
     _current_render_params: Dict[str, Any] = {}
@@ -123,7 +122,6 @@ class State(rx.State):
             self.render_error = ""
             self.is_rendering = False
             self.pdf_ready = False
-            self.pdf_data = ""
             
         except Exception as e:
             self.render_error = f"Failed to load report metadata: {str(e)}"
@@ -150,7 +148,6 @@ class State(rx.State):
             self.render_error = ""
             self.is_rendering = True
             self.pdf_ready = False
-            self.pdf_data = ""
             
             # Start background render task
             return State.render_report
@@ -188,9 +185,8 @@ class State(rx.State):
                     self.render_status = "Completed!"
                     self.is_rendering = False
                     self.pdf_ready = True
-                    # Encode PDF as base64 for download
-                    if result.pdf_bytes:
-                        self.pdf_data = base64.b64encode(result.pdf_bytes).decode('utf-8')
+                    # Initiate file download
+                    return rx.download(data=result.pdf_bytes, filename=f"{report_id}.pdf")
                 elif result.status == RenderStatus.FAILED:
                     self.render_status = "Failed"
                     self.render_error = result.error_message or "Unknown error"
@@ -387,23 +383,6 @@ def report_details_panel() -> rx.Component:
                     State.render_error,
                     icon="alert-triangle",
                     color_scheme="red",
-                ),
-                rx.fragment(),
-            ),
-            
-            # Download button
-            rx.cond(
-                State.pdf_ready,
-                rx.link(
-                    rx.button(
-                        "Download PDF",
-                        size="3",
-                        color_scheme="green",
-                        width="100%",
-                    ),
-                    href=f"data:application/pdf;base64,{State.pdf_data}",
-                    download=f"{State.selected_report_id}.pdf",
-                    is_external=True,
                 ),
                 rx.fragment(),
             ),
