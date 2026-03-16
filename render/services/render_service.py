@@ -34,7 +34,6 @@ class RenderServiceImpl(RenderServiceInterface):
         """
         self.cache_ttl_hours = cache_ttl_hours
         self.storage = get_storage()
-        self._background_tasks = set()
 
     def _calculate_hash(self, report_id: str, parameters: Dict[str, Any]) -> str:
         """
@@ -61,34 +60,11 @@ class RenderServiceImpl(RenderServiceInterface):
         """Get detailed metadata for a specific report."""
         return repository.get_metadata(report_id)
 
-    def startRender(
-        self, report_id: str, params: Dict[str, Any], force_refresh: bool = False
-    ) -> None:
-        """Start rendering a report in the background."""
-        # Calculate cache key
-        cache_key = self._calculate_hash(report_id, params)
-        
-        # Create background task
-        task = asyncio.create_task(
-            self._execute_render(report_id, params, cache_key, force_refresh)
-        )
-        
-        # Keep reference to prevent garbage collection
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
-        
-        logger.info(f"Started render for report {report_id} with hash {cache_key[:8]}")
-
-    def getRenderStatus(self, report_id: str, params: Dict[str, Any]) -> RenderResult:
+    async def getRenderStatus(self, report_id: str, params: Dict[str, Any]) -> RenderResult:
         """Get the current status and result of a report rendering."""
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
         
-        # Run async operation in sync context
-        return asyncio.run(self._get_render_status_async(cache_key))
-
-    async def _get_render_status_async(self, cache_key: str) -> RenderResult:
-        """Async implementation of getRenderStatus."""
         async with AsyncSessionLocal() as db:
             # Look up render record
             result = await db.execute(
@@ -133,22 +109,26 @@ class RenderServiceImpl(RenderServiceInterface):
             else:  # PENDING
                 return RenderResult(status=RenderStatus.PENDING)
 
-    async def _execute_render(
+    async def executeRender(
         self,
         report_id: str,
-        parameters: Dict[str, Any],
-        cache_key: str,
-        force_refresh: bool
-    ):
+        params: Dict[str, Any],
+        force_refresh: bool = False
+    ) -> RenderResult:
         """
-        Execute complete render workflow in background.
+        Execute complete render workflow and return the result.
 
         Args:
             report_id: Report template ID
-            parameters: User-provided parameters
-            cache_key: SHA256 hash for caching
+            params: User-provided parameters
             force_refresh: Whether to bypass cache
+            
+        Returns:
+            RenderResult with status COMPLETED or FAILED
         """
+        # Calculate cache key
+        cache_key = self._calculate_hash(report_id, params)
+        
         async with AsyncSessionLocal() as db:
             try:
                 # Check if we should skip rendering (cache hit and not force_refresh)
@@ -166,7 +146,16 @@ class RenderServiceImpl(RenderServiceInterface):
                     cached = result.scalar_one_or_none()
                     if cached:
                         logger.info(f"Using cached render for {cache_key[:8]}")
-                        return
+                        # Return cached PDF
+                        try:
+                            pdf_bytes = await self.storage.retrieve(cache_key)
+                            return RenderResult(
+                                status=RenderStatus.COMPLETED,
+                                pdf_bytes=pdf_bytes
+                            )
+                        except FileNotFoundError:
+                            logger.warning(f"Cached PDF not found for {cache_key[:8]}, re-rendering")
+                            # Continue to re-render
 
                 logger.info(f"Starting render execution for {cache_key[:8]}")
 
@@ -186,7 +175,7 @@ class RenderServiceImpl(RenderServiceInterface):
                     render = Render(
                         parameter_hash=cache_key,
                         report_id=report_id,
-                        parameters_json=json.dumps(parameters, default=str),
+                        parameters_json=json.dumps(params, default=str),
                         status=RenderStatus.RUNNING.value,
                         started_at=datetime.utcnow(),
                     )
@@ -199,11 +188,11 @@ class RenderServiceImpl(RenderServiceInterface):
                 logger.info(f"Loaded report: {report_id}")
 
                 # Execute queries
-                query_results = await query_executor.execute_queries(report, parameters)
+                query_results = await query_executor.execute_queries(report, params)
                 logger.info(f"Executed {len(query_results)} queries")
 
                 # Render template
-                html = template_renderer.render(report, parameters, query_results)
+                html = template_renderer.render(report, params, query_results)
                 logger.info("Template rendered successfully")
 
                 # Generate PDF
@@ -222,6 +211,12 @@ class RenderServiceImpl(RenderServiceInterface):
                 await db.commit()
 
                 logger.info(f"Render completed successfully: {cache_key[:8]}")
+                
+                # Return successful result
+                return RenderResult(
+                    status=RenderStatus.COMPLETED,
+                    pdf_bytes=pdf_bytes
+                )
 
             except Exception as e:
                 logger.error(f"Render failed for {cache_key[:8]}: {e}", exc_info=True)
@@ -240,6 +235,12 @@ class RenderServiceImpl(RenderServiceInterface):
                         await db.commit()
                 except Exception as update_error:
                     logger.error(f"Failed to update error status: {update_error}")
+                
+                # Return failed result
+                return RenderResult(
+                    status=RenderStatus.FAILED,
+                    error_message=str(e)
+                )
 
 
 # Global render service instance

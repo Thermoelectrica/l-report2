@@ -77,7 +77,11 @@ class State(rx.State):
     is_rendering: bool = False
     pdf_ready: bool = False
     pdf_data: str = ""  # Base64 encoded PDF
+    
+    # Current render params (for background task)
+    _current_render_params: Dict[str, Any] = {}
 
+    @rx.event
     async def load_reports(self):
         """Load all available reports on mount."""
         try:
@@ -90,6 +94,7 @@ class State(rx.State):
             self.render_error = f"Failed to load reports: {str(e)}"
             logger.error(f"Error loading reports: {e}", exc_info=True)
 
+    @rx.event
     def select_report(self, report_id: str):
         """Select a report and load its metadata."""
         try:
@@ -123,6 +128,7 @@ class State(rx.State):
         except Exception as e:
             self.render_error = f"Failed to load report metadata: {str(e)}"
 
+    @rx.event
     async def handle_submit(self, form_data: dict):
         """Handle form submission and start PDF rendering."""
         if not self.selected_report_id:
@@ -136,6 +142,9 @@ class State(rx.State):
             # Convert form params to appropriate types
             typed_params = self._convert_params(form_data)
             
+            # Store params in state for background task
+            self._current_render_params = typed_params
+            
             # Reset state
             self.render_status = "Starting render..."
             self.render_error = ""
@@ -143,67 +152,55 @@ class State(rx.State):
             self.pdf_ready = False
             self.pdf_data = ""
             
-            # Start render
-            render_service.startRender(
-                self.selected_report_id,
-                typed_params,
-                force_refresh=False
-            )
-            
-            # Start polling for status
-            await self._poll_render_status(typed_params)
+            # Start background render task
+            return State.render_report
             
         except Exception as e:
             self.render_error = f"Failed to start render: {str(e)}"
             self.is_rendering = False
             logger.error(f"Error in handle_submit: {e}", exc_info=True)
 
-    async def _poll_render_status(self, typed_params: Dict[str, Any]):
-        """Poll render status until completion."""
-        if not self.selected_report_id:
-            return
+
+    @rx.event(background=True)
+    async def render_report(self):
+        """Execute report rendering in background."""
+        async with self:
+            if not self.selected_report_id:
+                return
+            report_id = self.selected_report_id
+            typed_params = self._current_render_params
         
         try:
-            # Calculate cache key for direct async call
-            cache_key = render_service._calculate_hash(self.selected_report_id, typed_params)
+            # Update status
+            async with self:
+                self.render_status = "Rendering PDF..."
             
-            # Poll every 2 seconds
-            max_attempts = 150  # 5 minutes max
-            attempt = 0
+            # Execute render directly - no polling needed
+            result = await render_service.executeRender(
+                report_id,
+                typed_params,
+                force_refresh=False
+            )
             
-            while attempt < max_attempts:
-                # Call the async method directly instead of using getRenderStatus
-                result = await render_service._get_render_status_async(cache_key)
-                
-                if result.status == RenderStatus.PENDING:
-                    self.render_status = "Pending..."
-                elif result.status == RenderStatus.RUNNING:
-                    self.render_status = "Rendering PDF..."
-                elif result.status == RenderStatus.COMPLETED:
+            # Update state with result
+            async with self:
+                if result.status == RenderStatus.COMPLETED:
                     self.render_status = "Completed!"
                     self.is_rendering = False
                     self.pdf_ready = True
                     # Encode PDF as base64 for download
                     if result.pdf_bytes:
                         self.pdf_data = base64.b64encode(result.pdf_bytes).decode('utf-8')
-                    break
                 elif result.status == RenderStatus.FAILED:
                     self.render_status = "Failed"
                     self.render_error = result.error_message or "Unknown error"
                     self.is_rendering = False
-                    break
-                
-                await asyncio.sleep(2)
-                attempt += 1
-            
-            if attempt >= max_attempts:
-                self.render_status = "Timeout"
-                self.render_error = "Render took too long"
-                self.is_rendering = False
                 
         except Exception as e:
-            self.render_error = f"Polling error: {str(e)}"
-            self.is_rendering = False
+            async with self:
+                self.render_error = f"Render error: {str(e)}"
+                self.is_rendering = False
+                logger.error(f"Error in render_report: {e}", exc_info=True)
 
     def _convert_params(self, form_data: dict) -> Dict[str, Any]:
         """Convert form string params to typed values."""
