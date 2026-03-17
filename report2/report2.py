@@ -3,11 +3,14 @@
 import asyncio
 import base64
 import logging
+import sys
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any, Dict, List
 
 import reflex as rx
 
+from render.config import settings
 from render.database import close_db, init_db
 from render.models import (
     ParameterType,
@@ -22,6 +25,20 @@ from render.services.render_service import render_service
 from rxconfig import config
 
 logger = logging.getLogger(__name__)
+
+# Validate storage configuration on startup
+upload_dir = str(rx.get_upload_dir())
+storage_path = settings.storage_path
+
+if Path(storage_path).resolve() != Path(upload_dir).resolve():
+    logger.error(
+        f"CONFIGURATION ERROR: storage_path '{storage_path}' does not match "
+        f"Reflex upload directory '{upload_dir}'. "
+        f"Please set STORAGE_PATH={upload_dir} in your .env file."
+    )
+    sys.exit(1)
+
+logger.info(f"Storage path validated: {storage_path} matches Reflex upload directory")
 
 # Flag to track if services are initialized
 _services_initialized = False
@@ -188,10 +205,10 @@ class State(rx.State):
                     self.render_status = "Completed!"
                     self.is_rendering = False
                     self.pdf_ready = True
-                    # Initiate file download
-                    return rx.download(
-                        data=result.pdf_bytes, filename=f"{report_id}.pdf"
-                    )
+                    # Initiate file download using Reflex's upload URL mechanism
+                    if result.file_path:
+                        download_url = rx.get_upload_url(result.file_path)
+                        return rx.download(url=download_url, filename=f"{report_id}.pdf")
                 elif result.status == RenderStatus.FAILED:
                     self.render_status = "Failed"
                     self.render_error = result.error_message or "Unknown error"

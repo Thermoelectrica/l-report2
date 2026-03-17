@@ -142,15 +142,17 @@ class RenderServiceImpl(RenderServiceInterface):
                 cutoff_time = datetime.utcnow() - timedelta(minutes=cache_ttl_minutes)
 
                 if render.completed_at and render.completed_at >= cutoff_time:
-                    # Valid cached result - retrieve PDF
-                    try:
-                        pdf_bytes = await self.storage.retrieve(cache_key)
+                    # Valid cached result - return file path
+                    if render.pdf_path:
+                        filename = f"{cache_key}.pdf"
                         return RenderResult(
-                            status=RenderStatus.COMPLETED, pdf_bytes=pdf_bytes
+                            status=RenderStatus.COMPLETED,
+                            file_path=filename,
+                            filename=f"{report_id}.pdf"
                         )
-                    except FileNotFoundError:
+                    else:
                         logger.warning(
-                            f"PDF file not found for cache key {cache_key[:8]}"
+                            f"PDF path not found for cache key {cache_key[:8]}"
                         )
                         # Mark as pending to trigger re-render
                         return RenderResult(status=RenderStatus.PENDING)
@@ -210,15 +212,17 @@ class RenderServiceImpl(RenderServiceInterface):
                     cached = result.scalar_one_or_none()
                     if cached:
                         logger.info(f"Using cached render for {cache_key[:8]} (TTL: {cache_ttl_minutes} minutes)")
-                        # Return cached PDF
-                        try:
-                            pdf_bytes = await self.storage.retrieve(cache_key)
+                        # Return cached PDF path
+                        if cached.pdf_path:
+                            filename = f"{cache_key}.pdf"
                             return RenderResult(
-                                status=RenderStatus.COMPLETED, pdf_bytes=pdf_bytes
+                                status=RenderStatus.COMPLETED,
+                                file_path=filename,
+                                filename=f"{report_id}.pdf"
                             )
-                        except FileNotFoundError:
+                        else:
                             logger.warning(
-                                f"Cached PDF not found for {cache_key[:8]}, re-rendering"
+                                f"Cached PDF path not found for {cache_key[:8]}, re-rendering"
                             )
                             # Continue to re-render
 
@@ -277,8 +281,13 @@ class RenderServiceImpl(RenderServiceInterface):
 
                 logger.info(f"Render completed successfully: {cache_key[:8]}")
 
-                # Return successful result
-                return RenderResult(status=RenderStatus.COMPLETED, pdf_bytes=pdf_bytes)
+                # Return successful result with file path
+                filename = f"{cache_key}.pdf"
+                return RenderResult(
+                    status=RenderStatus.COMPLETED,
+                    file_path=filename,
+                    filename=f"{report_id}.pdf"
+                )
 
             except Exception as e:
                 logger.error(f"Render failed for {cache_key[:8]}: {e}", exc_info=True)

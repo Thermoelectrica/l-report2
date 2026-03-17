@@ -10,15 +10,12 @@ class RenderResult(BaseModel):
 
     Attributes:
         status: Current status of the rendering job
-        pdf_bytes: PDF file content as bytes (only present when status is COMPLETED)
+        file_path: Relative path to the PDF file (for URL generation)
+        filename: Filename for the PDF
         error_message: Error description (only present when status is FAILED)
     """
 
     status: RenderStatus
-    pdf_bytes: Optional[bytes] = None
+    file_path: Optional[str] = None
+    filename: Optional[str] = None
     error_message: Optional[str] = None
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True

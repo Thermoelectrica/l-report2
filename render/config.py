@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     # Storage
     storage_backend: Literal["filesystem", "s3"] = "filesystem"
-    storage_path: str = "./output/pdfs"
+    storage_path: str = "uploaded_files"
     s3_bucket: str | None = None
     s3_endpoint: str | None = None
     s3_access_key: str | None = None
