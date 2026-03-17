@@ -82,7 +82,36 @@ Templates receive the following context variables:
 - `format_number` - Format numbers with thousand separators: `{{ value | format_number }}`
 - `format_date` - Format dates as YYYY-MM-DD: `{{ date | format_date }}`
 - `format_datetime` - Format datetime as YYYY-MM-DD HH:MM:SS: `{{ datetime | format_datetime }}`
-- `image_url` - Generate S3 URL for images: `{{ 'path/to/image.jpg' | image_url }}`
+- `image_url` - Generate S3 presigned URL for remote images: `{{ 'path/to/image.jpg' | image_url }}`
+- `local_image` - Embed local images as base64 data URIs: `{{ 'logo.png' | local_image }}`
+
+### Using Local Images
+
+You can embed images stored in the same directory as your template using the `local_image` filter. This is useful for logos, icons, or any static images that should be included in the report.
+
+**Supported formats:** `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.bmp`
+
+**Example usage:**
+```jinja2
+{# Simple image embedding #}
+<img src="{{ 'logo.png' | local_image }}" alt="Company Logo">
+
+{# Conditional image display #}
+{% if 'header.jpg' | local_image %}
+    <img src="{{ 'header.jpg' | local_image }}" alt="Header">
+{% else %}
+    <p>Header image not found</p>
+{% endif %}
+
+{# Dynamic image from query results #}
+{% for item in queries.data %}
+    {% if item.image_filename %}
+        <img src="{{ item.image_filename | local_image }}" alt="{{ item.name }}">
+    {% endif %}
+{% endfor %}
+```
+
+**Example:** Place a file named `logo.png` in your report directory (e.g., `sample_reports/inspection-rep/logo.png`), then use it in your template with `{{ 'logo.png' | local_image }}`.
 
 ### Metadata File Format
 

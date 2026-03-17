@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 from jinja2 import Environment, FileSystemLoader
 
+from .local_image_service import local_image_service
 from .repository import Report
 from .s3_image_service import s3_image_service
 
@@ -35,6 +36,11 @@ class TemplateRenderer:
 
         # Add S3 image URL filter
         env.filters["image_url"] = s3_image_service.image_url
+
+        # Add local image filter (converts local images to base64 data URIs)
+        env.filters["local_image"] = lambda filename: local_image_service.get_image_data_uri(
+            filename, report.path
+        )
 
         return env
 

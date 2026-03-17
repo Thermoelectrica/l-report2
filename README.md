@@ -9,7 +9,7 @@ A flexible PDF report generation service that executes SQL queries and renders t
 - ⚡ **Smart Caching**: Configurable cache (default 5 minutes) with per-report overrides
 - 🔄 **Background Processing**: Async rendering with status polling
 - 💾 **Flexible Storage**: Filesystem or S3-compatible storage
-- 🖼️ **S3 Image Support**: Presigned URLs for images in reports
+- 🖼️ **Image Support**: S3 presigned URLs and local image embedding
 
 ## Architecture
 
@@ -245,7 +245,18 @@ Available in templates:
 - `{{ value | format_number }}` - Format numbers with commas
 - `{{ date | format_date }}` - Format dates as YYYY-MM-DD
 - `{{ datetime | format_datetime }}` - Format datetime
-- `{{ path | image_url }}` - Generate S3 presigned URLs for images
+- `{{ path | image_url }}` - Generate S3 presigned URLs for remote images
+- `{{ filename | local_image }}` - Embed local images as base64 data URIs
+
+### Local Image Embedding
+
+Place image files (PNG, JPG, GIF, SVG, WebP, BMP) in the same directory as your template and embed them using the `local_image` filter:
+
+```html
+<img src="{{ 'logo.png' | local_image }}" alt="Company Logo">
+```
+
+The filter converts the image to a base64 data URI, embedding it directly in the HTML/PDF. This eliminates external file dependencies and ensures images are always included in the generated PDF.
 
 ## Sample Reports
 
