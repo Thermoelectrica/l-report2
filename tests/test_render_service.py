@@ -68,32 +68,36 @@ class TestRenderServiceImpl:
             assert len(reports) == 2
             mock_repo.list_reports.assert_called_once()
 
-    def test_get_report_metadata(self):
+    @pytest.mark.asyncio
+    async def test_get_report_metadata(self):
         """Test getting report metadata."""
         service = RenderServiceImpl()
         
         with patch('render.services.render_service.repository') as mock_repo:
-            mock_metadata = MagicMock()
-            mock_metadata.id = "test-report"
-            mock_metadata.name = "Test Report"
-            mock_repo.get_metadata.return_value = mock_metadata
-            
-            metadata = service.getReportMetadata("test-report")
-            
-            assert metadata.id == "test-report"
-            assert metadata.name == "Test Report"
-            mock_repo.get_metadata.assert_called_once_with("test-report")
+            with patch('render.services.render_service.query_executor') as mock_qe:
+                mock_qe.pool = None  # Simulate uninitialized query executor
+                mock_metadata = MagicMock()
+                mock_metadata.id = "test-report"
+                mock_metadata.name = "Test Report"
+                mock_metadata.parameters = []
+                mock_repo.get_metadata.return_value = mock_metadata
+                mock_repo.get_report.return_value = MagicMock()
+                
+                metadata = await service.getReportMetadata("test-report")
+                
+                assert metadata.id == "test-report"
+                assert metadata.name == "Test Report"
+                mock_repo.get_metadata.assert_called_once_with("test-report")
 
     @pytest.mark.asyncio
     async def test_get_render_status_pending(self, db_session):
         """Test getting status when no render exists."""
         service = RenderServiceImpl()
-        cache_key = "nonexistent123"
         
         with patch('render.services.render_service.AsyncSessionLocal') as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
             
-            result = await service._get_render_status_async(cache_key)
+            result = await service.getRenderStatus("test-report", {"param": "value"})
             
             assert result.status == RenderStatus.PENDING
             assert result.pdf_bytes is None
@@ -103,7 +107,8 @@ class TestRenderServiceImpl:
     async def test_get_render_status_running(self, db_session):
         """Test getting status for running render."""
         service = RenderServiceImpl()
-        cache_key = "running123"
+        params = {"test": "value"}
+        cache_key = service._calculate_hash("test-report", params)
         
         # Create running render
         render = Render(
@@ -119,7 +124,7 @@ class TestRenderServiceImpl:
         with patch('render.services.render_service.AsyncSessionLocal') as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
             
-            result = await service._get_render_status_async(cache_key)
+            result = await service.getRenderStatus("test-report", params)
             
             assert result.status == RenderStatus.RUNNING
 
@@ -127,7 +132,8 @@ class TestRenderServiceImpl:
     async def test_get_render_status_failed(self, db_session):
         """Test getting status for failed render."""
         service = RenderServiceImpl()
-        cache_key = "failed123"
+        params = {"test": "value"}
+        cache_key = service._calculate_hash("test-report", params)
         error_msg = "Database connection failed"
         
         # Create failed render
@@ -145,7 +151,7 @@ class TestRenderServiceImpl:
         with patch('render.services.render_service.AsyncSessionLocal') as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
             
-            result = await service._get_render_status_async(cache_key)
+            result = await service.getRenderStatus("test-report", params)
             
             assert result.status == RenderStatus.FAILED
             assert result.error_message == error_msg
@@ -154,7 +160,8 @@ class TestRenderServiceImpl:
     async def test_get_render_status_completed_valid_cache(self, db_session, sample_pdf_bytes):
         """Test getting status for completed render with valid cache."""
         service = RenderServiceImpl(cache_ttl_hours=24)
-        cache_key = "completed123"
+        params = {"test": "value"}
+        cache_key = service._calculate_hash("test-report", params)
         
         # Create completed render (recent)
         render = Render(
@@ -176,7 +183,7 @@ class TestRenderServiceImpl:
             mock_session.return_value.__aenter__.return_value = db_session
             service.storage = mock_storage
             
-            result = await service._get_render_status_async(cache_key)
+            result = await service.getRenderStatus("test-report", params)
             
             assert result.status == RenderStatus.COMPLETED
             assert result.pdf_bytes == sample_pdf_bytes
@@ -186,7 +193,8 @@ class TestRenderServiceImpl:
     async def test_get_render_status_completed_expired_cache(self, db_session):
         """Test getting status for completed render with expired cache."""
         service = RenderServiceImpl(cache_ttl_hours=24)
-        cache_key = "expired123"
+        params = {"test": "value"}
+        cache_key = service._calculate_hash("test-report", params)
         
         # Create completed render (old)
         old_time = datetime.utcnow() - timedelta(hours=25)
@@ -204,7 +212,7 @@ class TestRenderServiceImpl:
         with patch('render.services.render_service.AsyncSessionLocal') as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
             
-            result = await service._get_render_status_async(cache_key)
+            result = await service.getRenderStatus("test-report", params)
             
             # Should return PENDING for expired cache
             assert result.status == RenderStatus.PENDING
@@ -214,19 +222,39 @@ class TestRenderServiceIntegration:
     """Integration tests for render service workflow."""
 
     @pytest.mark.asyncio
-    async def test_start_render_creates_background_task(self):
-        """Test that startRender creates a background task."""
+    async def test_execute_render_workflow(self):
+        """Test the complete render execution workflow."""
         service = RenderServiceImpl()
         
-        with patch.object(service, '_execute_render', new=AsyncMock()):
-            # Start render in async context
-            service.startRender("test-report", {"param": "value"})
+        # Mock all dependencies
+        with patch('render.services.render_service.repository') as mock_repo, \
+             patch('render.services.render_service.query_executor') as mock_qe, \
+             patch('render.services.render_service.template_renderer') as mock_tr, \
+             patch('render.services.render_service.pdf_generator') as mock_pdf, \
+             patch('render.services.render_service.AsyncSessionLocal') as mock_session:
             
-            # Give tasks a moment to start
-            await asyncio.sleep(0.1)
+            # Setup mocks
+            mock_report = MagicMock()
+            mock_repo.get_report.return_value = mock_report
+            mock_qe.execute_queries = AsyncMock(return_value={"query": []})
+            mock_tr.render.return_value = "<html>Test</html>"
+            mock_pdf.generate = AsyncMock(return_value=b"%PDF-test")
+            mock_storage = AsyncMock()
+            mock_storage.save = AsyncMock(return_value="/path/to/pdf")
+            service.storage = mock_storage
             
-            # Just verify no errors occurred
-            assert True  # If we got here, no exception was raised
+            # Mock database session
+            mock_db = AsyncMock()
+            mock_session.return_value.__aenter__.return_value = mock_db
+            mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+            mock_db.commit = AsyncMock()
+            
+            # Execute render
+            result = await service.executeRender("test-report", {"param": "value"})
+            
+            # Verify workflow
+            assert result.status == RenderStatus.COMPLETED
+            assert result.pdf_bytes == b"%PDF-test"
 
     def test_hash_consistency_across_service_calls(self):
         """Test hash remains consistent across multiple service calls."""

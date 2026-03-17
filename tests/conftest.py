@@ -7,7 +7,6 @@ from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from render.database.models import Base, Render
@@ -143,17 +142,16 @@ def sample_parameters() -> dict:
 
 @pytest.fixture
 def sample_query_results() -> dict:
-    """Create sample query results as DataFrames."""
+    """Create sample query results as list of dictionaries."""
     return {
-        "tables_list": pd.DataFrame({
-            "schema_name": ["public", "public"],
-            "table_name": ["users", "orders"],
-            "total_size": ["1 MB", "5 MB"],
-        }),
-        "table_stats": pd.DataFrame({
-            "table_name": ["users", "orders"],
-            "row_count": [100, 500],
-        }),
+        "tables_list": [
+            {"schema_name": "public", "table_name": "users", "total_size": "1 MB"},
+            {"schema_name": "public", "table_name": "orders", "total_size": "5 MB"},
+        ],
+        "table_stats": [
+            {"table_name": "users", "row_count": 100},
+            {"table_name": "orders", "row_count": 500},
+        ],
     }
 
 
@@ -306,7 +304,7 @@ def mock_query_executor():
     """Create mock query executor."""
     mock = AsyncMock()
     mock.execute_queries = AsyncMock(return_value={
-        "test_query": pd.DataFrame({"name": ["test"]})
+        "test_query": [{"name": "test"}]
     })
     return mock
 

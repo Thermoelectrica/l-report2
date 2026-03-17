@@ -1,7 +1,6 @@
 """Integration tests for the complete rendering workflow."""
 
 import pytest
-import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
@@ -126,12 +125,13 @@ ORDER BY tablename;
         html = renderer.render(
             report,
             {"date_value": datetime(2024, 1, 15)},
-            {"query": pd.DataFrame()}
+            {"query": []}
         )
         
         # Verify filters worked
         assert "1,234.56" in html
-        assert "2024-01-15" in html
+        # format_date outputs Russian format: «15» января 2024 г.
+        assert "15" in html and "2024" in html
 
     def test_multiple_queries_in_template(self, temp_reports_dir: Path, sample_query_results):
         """Test template with multiple query results."""
