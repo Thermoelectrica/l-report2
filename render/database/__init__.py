@@ -1,8 +1,9 @@
 """Database initialization and session management."""
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from .models import Base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from ..config import settings
+from .models import Base
 
 # Create async engine for metadata database
 engine = create_async_engine(

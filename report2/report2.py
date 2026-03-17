@@ -1,24 +1,25 @@
 """PDF Report Generator - Reflex Web Application."""
 
-import reflex as rx
-from typing import Dict, Any, List
 import asyncio
 import base64
 import logging
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any, Dict, List
 
-from rxconfig import config
-from render.services.render_service import render_service
-from render.services.query_executor import query_executor
-from render.database import init_db, close_db
+import reflex as rx
+
+from render.database import close_db, init_db
 from render.models import (
+    ParameterType,
+    RenderResult,
+    RenderStatus,
     ReportListItem,
     ReportMetadata,
     ReportParameter,
-    ParameterType,
-    RenderStatus,
-    RenderResult,
 )
+from render.services.query_executor import query_executor
+from render.services.render_service import render_service
+from rxconfig import config
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ _initialization_lock = asyncio.Lock()
 async def ensure_services_initialized():
     """Ensure all services are initialized (idempotent)."""
     global _services_initialized
-    
+
     async with _initialization_lock:
         if not _services_initialized:
             logger.info("Initializing services...")
@@ -38,11 +39,11 @@ async def ensure_services_initialized():
                 # Initialize database
                 await init_db()
                 logger.info("Database initialized")
-                
+
                 # Initialize query executor
                 await query_executor.initialize()
                 logger.info("Query executor initialized")
-                
+
                 _services_initialized = True
                 logger.info("All services initialized successfully")
             except Exception as e:
@@ -52,6 +53,7 @@ async def ensure_services_initialized():
 
 class ParamInfo(rx.Base):
     """Parameter information for UI rendering."""
+
     name: str
     type: str
     required: bool
@@ -65,19 +67,19 @@ class State(rx.State):
 
     # Report list
     reports: List[Dict[str, str]] = []
-    
+
     # Selected report
     selected_report_id: str = ""
     selected_report_name: str = ""
     selected_report_description: str = ""
     report_parameters: List[ParamInfo] = []
-    
+
     # Render status
     render_status: str = ""
     render_error: str = ""
     is_rendering: bool = False
     pdf_ready: bool = False
-    
+
     # Current render params (for background task)
     _current_render_params: Dict[str, Any] = {}
 
@@ -87,7 +89,7 @@ class State(rx.State):
         try:
             # Ensure services are initialized before loading reports
             await ensure_services_initialized()
-            
+
             report_list = render_service.listReports()
             self.reports = [{"id": r.id, "name": r.name} for r in report_list]
         except Exception as e:
@@ -100,14 +102,14 @@ class State(rx.State):
         try:
             # Ensure services are initialized
             await ensure_services_initialized()
-            
+
             self.selected_report_id = report_id
             metadata = await render_service.getReportMetadata(report_id)
-            
+
             # Store metadata in separate fields
             self.selected_report_name = metadata.name
             self.selected_report_description = metadata.description or ""
-            
+
             # Convert parameters to ParamInfo objects
             self.report_parameters = [
                 ParamInfo(
@@ -120,13 +122,13 @@ class State(rx.State):
                 )
                 for p in metadata.parameters
             ]
-            
+
             # Reset render state
             self.render_status = ""
             self.render_error = ""
             self.is_rendering = False
             self.pdf_ready = False
-            
+
         except Exception as e:
             self.render_error = f"Failed to load report metadata: {str(e)}"
 
@@ -136,31 +138,30 @@ class State(rx.State):
         if not self.selected_report_id:
             self.render_error = "No report selected"
             return
-        
+
         try:
             # Ensure services are initialized
             await ensure_services_initialized()
-            
+
             # Convert form params to appropriate types
             typed_params = self._convert_params(form_data)
-            
+
             # Store params in state for background task
             self._current_render_params = typed_params
-            
+
             # Reset state
             self.render_status = "Starting render..."
             self.render_error = ""
             self.is_rendering = True
             self.pdf_ready = False
-            
+
             # Start background render task
             return State.render_report
-            
+
         except Exception as e:
             self.render_error = f"Failed to start render: {str(e)}"
             self.is_rendering = False
             logger.error(f"Error in handle_submit: {e}", exc_info=True)
-
 
     @rx.event(background=True)
     async def render_report(self):
@@ -170,19 +171,17 @@ class State(rx.State):
                 return
             report_id = self.selected_report_id
             typed_params = self._current_render_params
-        
+
         try:
             # Update status
             async with self:
                 self.render_status = "Rendering PDF..."
-            
+
             # Execute render directly - no polling needed
             result = await render_service.executeRender(
-                report_id,
-                typed_params,
-                force_refresh=False
+                report_id, typed_params, force_refresh=False
             )
-            
+
             # Update state with result
             async with self:
                 if result.status == RenderStatus.COMPLETED:
@@ -190,12 +189,14 @@ class State(rx.State):
                     self.is_rendering = False
                     self.pdf_ready = True
                     # Initiate file download
-                    return rx.download(data=result.pdf_bytes, filename=f"{report_id}.pdf")
+                    return rx.download(
+                        data=result.pdf_bytes, filename=f"{report_id}.pdf"
+                    )
                 elif result.status == RenderStatus.FAILED:
                     self.render_status = "Failed"
                     self.render_error = result.error_message or "Unknown error"
                     self.is_rendering = False
-                
+
         except Exception as e:
             async with self:
                 self.render_error = f"Render error: {str(e)}"
@@ -206,24 +207,28 @@ class State(rx.State):
         """Convert form string params to typed values."""
         if not self.report_parameters:
             return {}
-        
+
         typed_params = {}
         for param_def in self.report_parameters:
             param_name = param_def.name
             param_type = param_def.type
             value_str = form_data.get(param_name, "")
-            
+
             # Special handling for boolean - always include it (switch can be on/off)
             if param_type == ParameterType.BOOLEAN.value:
                 # If value_str is truthy (switch is on), it will be "on" or "true"
                 # If switch is off, value_str will be empty string
-                typed_params[param_name] = value_str.lower() in ("true", "1", "yes", "on") if value_str else False
+                typed_params[param_name] = (
+                    value_str.lower() in ("true", "1", "yes", "on")
+                    if value_str
+                    else False
+                )
                 continue
-            
+
             # Skip empty non-required params (except boolean which is handled above)
             if not value_str and not param_def.required:
                 continue
-            
+
             # Convert based on type
             try:
                 if param_type == ParameterType.STRING.value:
@@ -239,14 +244,18 @@ class State(rx.State):
                 elif param_type == ParameterType.DATE.value:
                     # Convert date string (YYYY-MM-DD) to date object
                     if value_str:
-                        typed_params[param_name] = datetime.strptime(value_str, "%Y-%m-%d").date()
+                        typed_params[param_name] = datetime.strptime(
+                            value_str, "%Y-%m-%d"
+                        ).date()
                 elif param_type == ParameterType.DATETIME.value:
                     # Convert datetime string (YYYY-MM-DDTHH:MM) to datetime object
                     if value_str:
-                        typed_params[param_name] = datetime.strptime(value_str, "%Y-%m-%dT%H:%M")
+                        typed_params[param_name] = datetime.strptime(
+                            value_str, "%Y-%m-%dT%H:%M"
+                        )
             except ValueError as e:
                 raise ValueError(f"Invalid value for {param_name}: {e}")
-        
+
         return typed_params
 
 
@@ -300,7 +309,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
         justify_content="flex-end",
         padding_right="8px",
     )
-    
+
     input_field = rx.match(
         param.type,
         (
@@ -310,8 +319,8 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 default_value=param.default_value,
                 placeholder=f"Enter {param.name}",
                 type="date",
-                required=param.required
-            )
+                required=param.required,
+            ),
         ),
         (
             ParameterType.DATETIME.value,
@@ -320,8 +329,8 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 default_value=param.default_value,
                 placeholder=f"Enter {param.name}",
                 type="datetime-local",
-                required=param.required
-            )
+                required=param.required,
+            ),
         ),
         (
             ParameterType.INTEGER.value,
@@ -341,7 +350,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 ),
                 spacing="2",
                 align_items="center",
-            )
+            ),
         ),
         (
             ParameterType.FLOAT.value,
@@ -351,15 +360,15 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 placeholder=f"Enter {param.name}",
                 type="number",
                 step="any",
-                required=param.required
-            )
+                required=param.required,
+            ),
         ),
         (
             ParameterType.BOOLEAN.value,
             rx.switch(
                 name=param.name,
                 default_checked=rx.cond(param.default_value == "True", True, False),
-            )
+            ),
         ),
         rx.cond(
             param.enum_values,
@@ -377,11 +386,11 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 placeholder=f"Enter {param.name}",
                 type="text",
                 width="48%",
-                required=param.required
-            )
-        )
+                required=param.required,
+            ),
+        ),
     )
-    
+
     return rx.hstack(
         label,
         input_field,
@@ -411,7 +420,6 @@ def report_details_panel() -> rx.Component:
                 rx.fragment(),
             ),
             rx.divider(),
-            
             # Parameters form
             rx.form(
                 rx.vstack(
@@ -428,7 +436,6 @@ def report_details_panel() -> rx.Component:
                         ),
                         rx.text("No parameters required", size="2", color="gray"),
                     ),
-                    
                     # Submit button
                     rx.button(
                         "Generate PDF",
@@ -437,7 +444,6 @@ def report_details_panel() -> rx.Component:
                         size="3",
                         width="100%",
                     ),
-                    
                     spacing="4",
                     width="100%",
                 ),
@@ -446,7 +452,6 @@ def report_details_panel() -> rx.Component:
                 key=State.selected_report_id,
                 reset_on_submit=False,
             ),
-            
             # Status display (only show if no error)
             rx.cond(
                 (State.render_status != "") & (State.render_error == ""),
@@ -455,26 +460,17 @@ def report_details_panel() -> rx.Component:
                     icon=rx.cond(
                         State.render_status == "Completed!",
                         "check-circle",
-                        rx.cond(
-                            State.is_rendering,
-                            "loader",
-                            "info"
-                        )
+                        rx.cond(State.is_rendering, "loader", "info"),
                     ),
                     color_scheme=rx.cond(
                         State.render_status == "Completed!",
                         "green",
-                        rx.cond(
-                            State.render_status == "Failed",
-                            "red",
-                            "blue"
-                        )
+                        rx.cond(State.render_status == "Failed", "red", "blue"),
                     ),
                     width="100%",
                 ),
                 rx.fragment(),
             ),
-            
             # Error display
             rx.cond(
                 State.render_error != "",
@@ -486,7 +482,6 @@ def report_details_panel() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            
             spacing="4",
             align_items="start",
             width="100%",
@@ -519,7 +514,6 @@ def index() -> rx.Component:
                 size="3",
                 color="gray",
             ),
-            
             # Two-column layout
             rx.hstack(
                 # Left column - Report list
@@ -545,9 +539,8 @@ def index() -> rx.Component:
                     border="1px solid var(--gray-5)",
                     background="var(--gray-1)",
                     overflow_y="auto",
-                    width="30%"
+                    width="30%",
                 ),
-                
                 # Right column - Report details and form
                 rx.box(
                     report_details_panel(),
@@ -556,13 +549,11 @@ def index() -> rx.Component:
                     border="1px solid var(--gray-5)",
                     background="var(--gray-1)",
                     overflow_y="auto",
-                    width="70%"
+                    width="70%",
                 ),
-                
                 spacing="4",
                 width="100%",
             ),
-            
             spacing="5",
             width="100%",
             padding="20px",

@@ -2,15 +2,15 @@
 
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-from datetime import datetime
 
 import asyncpg
 
 from ..config import settings
-from .repository import Report
 from ..models import ParameterType
+from .repository import Report
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,9 @@ class QueryExecutor:
 
             # Execute query
             timeout = report.metadata.timeout or settings.default_query_timeout
-            rows = await self._execute_query(query, parameters, timeout, report.metadata)
+            rows = await self._execute_query(
+                query, parameters, timeout, report.metadata
+            )
             results[query_name] = rows
 
             logger.info(f"Query {query_name} returned {len(rows)} rows")
@@ -109,7 +111,7 @@ class QueryExecutor:
 
         # Execute query with a short timeout (enum queries should be fast)
         timeout = 10  # 10 seconds for enum queries
-        
+
         async with self.pool.acquire() as conn:
             try:
                 # Set statement timeout
@@ -120,9 +122,14 @@ class QueryExecutor:
                     # Convert named parameters to positional if needed
                     # For enum queries, we create a minimal metadata object
                     from ..models import ReportMetadata
-                    minimal_metadata = ReportMetadata(id="enum", name="enum", parameters=[])
-                    converted_query, positional_params = self._convert_named_to_positional(
-                        query, parameters, minimal_metadata
+
+                    minimal_metadata = ReportMetadata(
+                        id="enum", name="enum", parameters=[]
+                    )
+                    converted_query, positional_params = (
+                        self._convert_named_to_positional(
+                            query, parameters, minimal_metadata
+                        )
                     )
                     rows = await conn.fetch(converted_query, *positional_params)
                 else:
@@ -149,17 +156,17 @@ class QueryExecutor:
     def _convert_default_value(self, value: Any, param_type: ParameterType) -> Any:
         """
         Convert default value from metadata to proper Python type.
-        
+
         Args:
             value: Default value from metadata (usually a string)
             param_type: Parameter type definition
-            
+
         Returns:
             Properly typed value
         """
         if value is None:
             return None
-            
+
         # If already the correct type, return as-is
         if param_type == ParameterType.STRING:
             return str(value)
@@ -186,7 +193,7 @@ class QueryExecutor:
                         continue
                 raise ValueError(f"Unable to parse datetime: {value}")
             return value
-        
+
         return value
 
     def _convert_named_to_positional(

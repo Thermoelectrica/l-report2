@@ -7,22 +7,22 @@ from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from render.database.models import Base, Render
 from render.models import (
+    ParameterType,
+    RenderStatus,
+    ReportListItem,
     ReportMetadata,
     ReportParameter,
-    ParameterType,
-    ReportListItem,
-    RenderStatus,
 )
 from render.services.repository import Report
-
 
 # ============================================================================
 # Async Event Loop Fixture
 # ============================================================================
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -36,6 +36,7 @@ def event_loop():
 # Database Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 async def test_db_engine():
     """Create in-memory SQLite database engine for testing."""
@@ -43,12 +44,12 @@ async def test_db_engine():
         "sqlite+aiosqlite:///:memory:",
         echo=False,
     )
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     await engine.dispose()
 
 
@@ -60,7 +61,7 @@ async def db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    
+
     async with async_session() as session:
         yield session
         await session.rollback()
@@ -69,6 +70,7 @@ async def db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
 # ============================================================================
 # Temporary Directory Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
@@ -96,6 +98,7 @@ def temp_storage_dir(temp_dir: Path) -> Path:
 # ============================================================================
 # Sample Data Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_report_metadata() -> ReportMetadata:
@@ -223,12 +226,15 @@ startxref
 # Mock Report Fixtures
 # ============================================================================
 
+
 @pytest.fixture
-def mock_report(sample_report_metadata: ReportMetadata, temp_reports_dir: Path) -> Report:
+def mock_report(
+    sample_report_metadata: ReportMetadata, temp_reports_dir: Path
+) -> Report:
     """Create mock Report object with files."""
     report_dir = temp_reports_dir / "test-report"
     report_dir.mkdir()
-    
+
     # Create metadata.yaml
     metadata_file = report_dir / "metadata.yaml"
     metadata_file.write_text("""
@@ -251,7 +257,7 @@ parameters:
     description: "Schema name"
     default: "public"
 """)
-    
+
     # Create template
     template_file = report_dir / "index.html.j2"
     template_file.write_text("""
@@ -268,17 +274,18 @@ parameters:
 </body>
 </html>
 """)
-    
+
     # Create SQL query
     query_file = report_dir / "test_query.sql"
     query_file.write_text("SELECT 'test' as name;")
-    
+
     return Report(report_dir, sample_report_metadata)
 
 
 # ============================================================================
 # Database Record Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 async def sample_render_record(db_session: AsyncSession) -> Render:
@@ -299,13 +306,12 @@ async def sample_render_record(db_session: AsyncSession) -> Render:
 # Mock Service Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_query_executor():
     """Create mock query executor."""
     mock = AsyncMock()
-    mock.execute_queries = AsyncMock(return_value={
-        "test_query": [{"name": "test"}]
-    })
+    mock.execute_queries = AsyncMock(return_value={"test_query": [{"name": "test"}]})
     return mock
 
 

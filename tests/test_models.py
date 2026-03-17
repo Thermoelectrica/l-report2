@@ -4,12 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from render.models import (
+    ParameterType,
+    RenderResult,
+    RenderStatus,
     ReportListItem,
     ReportMetadata,
     ReportParameter,
-    ParameterType,
-    RenderStatus,
-    RenderResult,
 )
 
 
@@ -123,8 +123,12 @@ class TestReportMetadata:
             id="test",
             name="Test",
             parameters=[
-                ReportParameter(name="start_date", type=ParameterType.DATE, required=True),
-                ReportParameter(name="end_date", type=ParameterType.DATE, required=True),
+                ReportParameter(
+                    name="start_date", type=ParameterType.DATE, required=True
+                ),
+                ReportParameter(
+                    name="end_date", type=ParameterType.DATE, required=True
+                ),
                 ReportParameter(name="limit", type=ParameterType.INTEGER, default=100),
             ],
         )

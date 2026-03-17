@@ -1,10 +1,11 @@
 """Unit tests for report repository."""
 
-import pytest
 from pathlib import Path
 
-from render.services.repository import ReportRepository, Report
+import pytest
+
 from render.models import ParameterType
+from render.services.repository import Report, ReportRepository
 
 
 class TestReportRepository:
@@ -15,7 +16,7 @@ class TestReportRepository:
         # Create a valid report structure
         report_dir = temp_reports_dir / "test-report"
         report_dir.mkdir()
-        
+
         # Create metadata.yaml
         (report_dir / "metadata.yaml").write_text("""
 name: "Test Report"
@@ -28,16 +29,18 @@ parameters:
     required: true
     description: "User ID"
 """)
-        
+
         # Create template
         (report_dir / "index.html.j2").write_text("<html><body>Test</body></html>")
-        
+
         # Create SQL query
-        (report_dir / "query.sql").write_text("SELECT * FROM users WHERE id = :user_id;")
-        
+        (report_dir / "query.sql").write_text(
+            "SELECT * FROM users WHERE id = :user_id;"
+        )
+
         # Load repository
         repo = ReportRepository(str(temp_reports_dir))
-        
+
         # Verify report was loaded
         reports = repo.list_reports()
         assert len(reports) == 1
@@ -49,7 +52,7 @@ parameters:
         # Create report
         report_dir = temp_reports_dir / "sales-report"
         report_dir.mkdir()
-        
+
         (report_dir / "metadata.yaml").write_text("""
 name: "Sales Report"
 description: "Monthly sales"
@@ -64,10 +67,10 @@ parameters:
 """)
         (report_dir / "index.html.j2").write_text("<html></html>")
         (report_dir / "sales.sql").write_text("SELECT * FROM sales;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
         metadata = repo.get_metadata("sales-report")
-        
+
         assert metadata.id == "sales-report"
         assert metadata.name == "Sales Report"
         assert metadata.description == "Monthly sales"
@@ -81,7 +84,7 @@ parameters:
     def test_get_nonexistent_report(self, temp_reports_dir: Path):
         """Test getting a report that doesn't exist."""
         repo = ReportRepository(str(temp_reports_dir))
-        
+
         with pytest.raises(ValueError, match="Report not found"):
             repo.get_report("nonexistent-report")
 
@@ -91,9 +94,9 @@ parameters:
         report_dir.mkdir()
         (report_dir / "index.html.j2").write_text("<html></html>")
         (report_dir / "query.sql").write_text("SELECT 1;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
-        
+
         # Report should not be loaded
         assert len(repo.list_reports()) == 0
 
@@ -103,9 +106,9 @@ parameters:
         report_dir.mkdir()
         (report_dir / "metadata.yaml").write_text("name: Test\n")
         (report_dir / "query.sql").write_text("SELECT 1;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
-        
+
         # Report should not be loaded
         assert len(repo.list_reports()) == 0
 
@@ -115,9 +118,9 @@ parameters:
         report_dir.mkdir()
         (report_dir / "metadata.yaml").write_text("name: Test\n")
         (report_dir / "index.html.j2").write_text("<html></html>")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
-        
+
         # Report should not be loaded
         assert len(repo.list_reports()) == 0
 
@@ -129,17 +132,17 @@ parameters:
         (report1 / "metadata.yaml").write_text("name: Report 1\n")
         (report1 / "index.html.j2").write_text("<html></html>")
         (report1 / "query.sql").write_text("SELECT 1;")
-        
+
         # Create second report
         report2 = temp_reports_dir / "report2"
         report2.mkdir()
         (report2 / "metadata.yaml").write_text("name: Report 2\n")
         (report2 / "index.html.j2").write_text("<html></html>")
         (report2 / "query.sql").write_text("SELECT 2;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
         reports = repo.list_reports()
-        
+
         assert len(reports) == 2
         report_ids = {r.id for r in reports}
         assert report_ids == {"report1", "report2"}
@@ -152,17 +155,17 @@ parameters:
         (report_dir / "metadata.yaml").write_text("name: Test\n")
         (report_dir / "index.html.j2").write_text("<html></html>")
         (report_dir / "query.sql").write_text("SELECT 1;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
         assert len(repo.list_reports()) == 1
-        
+
         # Add another report
         report2_dir = temp_reports_dir / "new-report"
         report2_dir.mkdir()
         (report2_dir / "metadata.yaml").write_text("name: New\n")
         (report2_dir / "index.html.j2").write_text("<html></html>")
         (report2_dir / "query.sql").write_text("SELECT 2;")
-        
+
         # Reload
         repo.reload()
         assert len(repo.list_reports()) == 2
@@ -182,13 +185,13 @@ class TestReport:
         """Test query files are sorted alphabetically."""
         report_dir = temp_reports_dir / "test"
         report_dir.mkdir()
-        
+
         # Create queries in non-alphabetical order
         (report_dir / "z_query.sql").write_text("SELECT 1;")
         (report_dir / "a_query.sql").write_text("SELECT 2;")
         (report_dir / "m_query.sql").write_text("SELECT 3;")
-        
+
         report = Report(report_dir, sample_report_metadata)
-        
+
         query_names = [f.stem for f in report.query_files]
         assert query_names == ["a_query", "m_query", "z_query"]

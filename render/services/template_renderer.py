@@ -1,8 +1,8 @@
 """Jinja2 template renderer."""
 
+import locale
 import logging
 from datetime import datetime
-import locale
 from typing import Any, Dict, List
 
 from jinja2 import Environment, FileSystemLoader
@@ -26,7 +26,7 @@ class TemplateRenderer:
         )
 
         # Add custom filters
-        locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
+        locale.setlocale(locale.LC_TIME, "ru_RU.UTF-8")
         env.filters["format_number"] = lambda x: f"{x:,.2f}" if x is not None else ""
         env.filters["format_date"] = lambda x: x.strftime("«%d» %B %Y г.") if x else ""
         env.filters["format_datetime"] = lambda x: (
@@ -68,7 +68,7 @@ class TemplateRenderer:
                     "version": report.metadata.version,
                 },
                 "params": parameters,
-                "queries": query_results,  
+                "queries": query_results,
             }
 
             logger.info(f"Rendering template for report: {report.id}")

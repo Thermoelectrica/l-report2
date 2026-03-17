@@ -1,23 +1,26 @@
 """Integration tests for the complete rendering workflow."""
 
-import pytest
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
+import pytest
+
+from render.models import RenderStatus
 from render.services.repository import ReportRepository
 from render.services.template_renderer import TemplateRenderer
-from render.models import RenderStatus
 
 
 class TestReportWorkflow:
     """Integration tests for complete report workflow."""
 
-    def test_load_and_render_template(self, temp_reports_dir: Path, sample_parameters, sample_query_results):
+    def test_load_and_render_template(
+        self, temp_reports_dir: Path, sample_parameters, sample_query_results
+    ):
         """Test loading a report and rendering its template."""
         # Create a complete report
         report_dir = temp_reports_dir / "integration-test"
         report_dir.mkdir()
-        
+
         # Create metadata
         (report_dir / "metadata.yaml").write_text("""
 name: "Integration Test Report"
@@ -35,7 +38,7 @@ parameters:
     required: false
     default: "public"
 """)
-        
+
         # Create template
         (report_dir / "index.html.j2").write_text("""
 <!DOCTYPE html>
@@ -67,7 +70,7 @@ parameters:
 </body>
 </html>
 """)
-        
+
         # Create SQL query
         (report_dir / "tables_list.sql").write_text("""
 SELECT 
@@ -78,21 +81,21 @@ FROM pg_tables
 WHERE schemaname = :schema_name
 ORDER BY tablename;
 """)
-        
+
         # Load repository
         repo = ReportRepository(str(temp_reports_dir))
         report = repo.get_report("integration-test")
-        
+
         # Verify report loaded correctly
         assert report.id == "integration-test"
         assert report.metadata.name == "Integration Test Report"
         assert len(report.metadata.parameters) == 3
         assert len(report.query_files) == 1
-        
+
         # Render template
         renderer = TemplateRenderer()
         html = renderer.render(report, sample_parameters, sample_query_results)
-        
+
         # Verify rendered HTML
         assert "Integration Test Report" in html
         assert sample_parameters["start_date"] in html
@@ -106,7 +109,7 @@ ORDER BY tablename;
         # Create report with filters
         report_dir = temp_reports_dir / "filter-test"
         report_dir.mkdir()
-        
+
         (report_dir / "metadata.yaml").write_text("name: Filter Test\n")
         (report_dir / "index.html.j2").write_text("""
 <html>
@@ -117,27 +120,27 @@ ORDER BY tablename;
 </html>
 """)
         (report_dir / "query.sql").write_text("SELECT 1;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
         report = repo.get_report("filter-test")
-        
+
         renderer = TemplateRenderer()
         html = renderer.render(
-            report,
-            {"date_value": datetime(2024, 1, 15)},
-            {"query": []}
+            report, {"date_value": datetime(2024, 1, 15)}, {"query": []}
         )
-        
+
         # Verify filters worked
         assert "1,234.56" in html
         # format_date outputs Russian format: «15» января 2024 г.
         assert "15" in html and "2024" in html
 
-    def test_multiple_queries_in_template(self, temp_reports_dir: Path, sample_query_results):
+    def test_multiple_queries_in_template(
+        self, temp_reports_dir: Path, sample_query_results
+    ):
         """Test template with multiple query results."""
         report_dir = temp_reports_dir / "multi-query"
         report_dir.mkdir()
-        
+
         (report_dir / "metadata.yaml").write_text("name: Multi Query\n")
         (report_dir / "index.html.j2").write_text("""
 <html>
@@ -156,13 +159,13 @@ ORDER BY tablename;
 """)
         (report_dir / "tables_list.sql").write_text("SELECT 1;")
         (report_dir / "table_stats.sql").write_text("SELECT 2;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
         report = repo.get_report("multi-query")
-        
+
         renderer = TemplateRenderer()
         html = renderer.render(report, {}, sample_query_results)
-        
+
         # Verify both queries rendered
         assert "users" in html
         assert "orders" in html
@@ -189,14 +192,14 @@ parameters:
 """)
             (report_dir / "index.html.j2").write_text("<html></html>")
             (report_dir / "query.sql").write_text("SELECT 1;")
-        
+
         # Load repository
         repo = ReportRepository(str(temp_reports_dir))
-        
+
         # List all reports
         reports = repo.list_reports()
         assert len(reports) == 3
-        
+
         # Get metadata for each
         for i in range(3):
             metadata = repo.get_metadata(f"report{i}")
@@ -209,7 +212,7 @@ parameters:
         """Test parameter validation in metadata."""
         report_dir = temp_reports_dir / "param-test"
         report_dir.mkdir()
-        
+
         (report_dir / "metadata.yaml").write_text("""
 name: "Parameter Test"
 parameters:
@@ -228,13 +231,13 @@ parameters:
 """)
         (report_dir / "index.html.j2").write_text("<html></html>")
         (report_dir / "query.sql").write_text("SELECT 1;")
-        
+
         repo = ReportRepository(str(temp_reports_dir))
         metadata = repo.get_metadata("param-test")
-        
+
         # Verify parameter definitions
         params = {p.name: p for p in metadata.parameters}
-        
+
         assert params["required_param"].required is True
         assert params["optional_param"].required is False
         assert params["optional_param"].default == 100

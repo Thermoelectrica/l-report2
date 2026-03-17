@@ -1,9 +1,9 @@
 """Storage backends for PDF files."""
 
+from ..config import settings
 from .base import StorageBackend
 from .filesystem import FilesystemStorage
 from .s3 import S3Storage
-from ..config import settings
 
 
 def get_storage() -> StorageBackend:

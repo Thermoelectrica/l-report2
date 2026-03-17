@@ -4,21 +4,27 @@ import asyncio
 import hashlib
 import json
 import logging
+from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
-from copy import deepcopy
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 
 from ..database import AsyncSessionLocal
 from ..database.models import Render
-from ..models import RenderStatus, RenderResult, ReportListItem, ReportMetadata, ReportParameter
-from .interface import RenderService as RenderServiceInterface
+from ..models import (
+    RenderResult,
+    RenderStatus,
+    ReportListItem,
+    ReportMetadata,
+    ReportParameter,
+)
 from ..storage import get_storage
-from .repository import repository
-from .query_executor import query_executor
-from .template_renderer import template_renderer
+from .interface import RenderService as RenderServiceInterface
 from .pdf_generator import pdf_generator
+from .query_executor import query_executor
+from .repository import repository
+from .template_renderer import template_renderer
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +35,7 @@ class RenderServiceImpl(RenderServiceInterface):
     def __init__(self, cache_ttl_hours: int = 24):
         """
         Initialize render service.
-        
+
         Args:
             cache_ttl_hours: Cache time-to-live in hours
         """
@@ -62,10 +68,10 @@ class RenderServiceImpl(RenderServiceInterface):
         # Get base metadata from repository
         metadata = repository.get_metadata(report_id)
         report = repository.get_report(report_id)
-        
+
         # Create a deep copy to avoid modifying the cached metadata
         metadata_copy = deepcopy(metadata)
-        
+
         # Resolve dynamic enums only if query executor is initialized
         if query_executor.pool is None:
             logger.warning(
@@ -73,23 +79,25 @@ class RenderServiceImpl(RenderServiceInterface):
                 "Call query_executor.initialize() first."
             )
             return metadata_copy
-        
+
         logger.info(f"Resolving dynamic enums for report: {report_id}")
-        
+
         # Resolve dynamic enums
         for param in metadata_copy.parameters:
             if param.enum_query:
-                logger.info(f"Found enum_query '{param.enum_query}' for parameter '{param.name}'")
+                logger.info(
+                    f"Found enum_query '{param.enum_query}' for parameter '{param.name}'"
+                )
                 # Find the query file
                 query_file = report.path / param.enum_query
-                
+
                 if not query_file.exists():
                     logger.warning(
                         f"Enum query file not found: {param.enum_query} for parameter {param.name} "
                         f"(looked in {query_file})"
                     )
                     continue
-                
+
                 try:
                     # Execute the enum query
                     logger.info(f"Executing enum query from {query_file}")
@@ -101,17 +109,19 @@ class RenderServiceImpl(RenderServiceInterface):
                 except Exception as e:
                     logger.error(
                         f"Failed to execute enum query for parameter {param.name}: {e}",
-                        exc_info=True
+                        exc_info=True,
                     )
                     # Keep the parameter without enum values
-        
+
         return metadata_copy
 
-    async def getRenderStatus(self, report_id: str, params: Dict[str, Any]) -> RenderResult:
+    async def getRenderStatus(
+        self, report_id: str, params: Dict[str, Any]
+    ) -> RenderResult:
         """Get the current status and result of a report rendering."""
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
-        
+
         async with AsyncSessionLocal() as db:
             # Look up render record
             result = await db.execute(
@@ -126,17 +136,18 @@ class RenderServiceImpl(RenderServiceInterface):
             # Check if completed and not expired
             if render.status == RenderStatus.COMPLETED.value:
                 cutoff_time = datetime.utcnow() - timedelta(hours=self.cache_ttl_hours)
-                
+
                 if render.completed_at and render.completed_at >= cutoff_time:
                     # Valid cached result - retrieve PDF
                     try:
                         pdf_bytes = await self.storage.retrieve(cache_key)
                         return RenderResult(
-                            status=RenderStatus.COMPLETED,
-                            pdf_bytes=pdf_bytes
+                            status=RenderStatus.COMPLETED, pdf_bytes=pdf_bytes
                         )
                     except FileNotFoundError:
-                        logger.warning(f"PDF file not found for cache key {cache_key[:8]}")
+                        logger.warning(
+                            f"PDF file not found for cache key {cache_key[:8]}"
+                        )
                         # Mark as pending to trigger re-render
                         return RenderResult(status=RenderStatus.PENDING)
                 else:
@@ -146,8 +157,7 @@ class RenderServiceImpl(RenderServiceInterface):
 
             elif render.status == RenderStatus.FAILED.value:
                 return RenderResult(
-                    status=RenderStatus.FAILED,
-                    error_message=render.error_message
+                    status=RenderStatus.FAILED, error_message=render.error_message
                 )
 
             elif render.status == RenderStatus.RUNNING.value:
@@ -157,10 +167,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 return RenderResult(status=RenderStatus.PENDING)
 
     async def executeRender(
-        self,
-        report_id: str,
-        params: Dict[str, Any],
-        force_refresh: bool = False
+        self, report_id: str, params: Dict[str, Any], force_refresh: bool = False
     ) -> RenderResult:
         """
         Execute complete render workflow and return the result.
@@ -169,24 +176,26 @@ class RenderServiceImpl(RenderServiceInterface):
             report_id: Report template ID
             params: User-provided parameters
             force_refresh: Whether to bypass cache
-            
+
         Returns:
             RenderResult with status COMPLETED or FAILED
         """
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
-        
+
         async with AsyncSessionLocal() as db:
             try:
                 # Check if we should skip rendering (cache hit and not force_refresh)
                 if not force_refresh:
-                    cutoff_time = datetime.utcnow() - timedelta(hours=self.cache_ttl_hours)
+                    cutoff_time = datetime.utcnow() - timedelta(
+                        hours=self.cache_ttl_hours
+                    )
                     result = await db.execute(
                         select(Render).where(
                             and_(
                                 Render.parameter_hash == cache_key,
                                 Render.status == RenderStatus.COMPLETED.value,
-                                Render.completed_at >= cutoff_time
+                                Render.completed_at >= cutoff_time,
                             )
                         )
                     )
@@ -197,11 +206,12 @@ class RenderServiceImpl(RenderServiceInterface):
                         try:
                             pdf_bytes = await self.storage.retrieve(cache_key)
                             return RenderResult(
-                                status=RenderStatus.COMPLETED,
-                                pdf_bytes=pdf_bytes
+                                status=RenderStatus.COMPLETED, pdf_bytes=pdf_bytes
                             )
                         except FileNotFoundError:
-                            logger.warning(f"Cached PDF not found for {cache_key[:8]}, re-rendering")
+                            logger.warning(
+                                f"Cached PDF not found for {cache_key[:8]}, re-rendering"
+                            )
                             # Continue to re-render
 
                 logger.info(f"Starting render execution for {cache_key[:8]}")
@@ -258,12 +268,9 @@ class RenderServiceImpl(RenderServiceInterface):
                 await db.commit()
 
                 logger.info(f"Render completed successfully: {cache_key[:8]}")
-                
+
                 # Return successful result
-                return RenderResult(
-                    status=RenderStatus.COMPLETED,
-                    pdf_bytes=pdf_bytes
-                )
+                return RenderResult(status=RenderStatus.COMPLETED, pdf_bytes=pdf_bytes)
 
             except Exception as e:
                 logger.error(f"Render failed for {cache_key[:8]}: {e}", exc_info=True)
@@ -274,7 +281,7 @@ class RenderServiceImpl(RenderServiceInterface):
                         select(Render).where(Render.parameter_hash == cache_key)
                     )
                     render = result.scalar_one_or_none()
-                    
+
                     if render:
                         render.status = RenderStatus.FAILED.value
                         render.completed_at = datetime.utcnow()
@@ -282,12 +289,9 @@ class RenderServiceImpl(RenderServiceInterface):
                         await db.commit()
                 except Exception as update_error:
                     logger.error(f"Failed to update error status: {update_error}")
-                
+
                 # Return failed result
-                return RenderResult(
-                    status=RenderStatus.FAILED,
-                    error_message=str(e)
-                )
+                return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
 
 
 # Global render service instance

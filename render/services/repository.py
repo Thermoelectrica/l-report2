@@ -7,7 +7,7 @@ from typing import Dict, List
 import yaml
 
 from ..config import settings
-from ..models import ReportMetadata, ReportListItem, ReportParameter, ParameterType
+from ..models import ParameterType, ReportListItem, ReportMetadata, ReportParameter
 
 logger = logging.getLogger(__name__)
 
