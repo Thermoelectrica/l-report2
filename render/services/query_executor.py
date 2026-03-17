@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Tuple
 from datetime import datetime
 
 import asyncpg
-import pandas as pd
 
 from ..config import settings
 from .repository import Report
@@ -48,7 +47,7 @@ class QueryExecutor:
 
     async def execute_queries(
         self, report: Report, parameters: Dict[str, Any]
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Execute all SQL queries for a report.
 
@@ -57,7 +56,7 @@ class QueryExecutor:
             parameters: User-provided parameters for query binding
 
         Returns:
-            Dictionary mapping query names to DataFrames with results
+            Dictionary mapping query names to list of row dictionaries
         """
         if not self.pool:
             raise RuntimeError(
@@ -77,10 +76,10 @@ class QueryExecutor:
 
             # Execute query
             timeout = report.metadata.timeout or settings.default_query_timeout
-            df = await self._execute_query(query, parameters, timeout, report.metadata)
-            results[query_name] = df
+            rows = await self._execute_query(query, parameters, timeout, report.metadata)
+            results[query_name] = rows
 
-            logger.info(f"Query {query_name} returned {len(df)} rows")
+            logger.info(f"Query {query_name} returned {len(rows)} rows")
 
         return results
 
@@ -260,9 +259,9 @@ class QueryExecutor:
 
     async def _execute_query(
         self, query: str, parameters: Dict[str, Any], timeout: int, metadata: Any
-    ) -> pd.DataFrame:
+    ) -> List[Dict[str, Any]]:
         """
-        Execute a single query and return DataFrame.
+        Execute a single query and return list of dictionaries.
 
         Args:
             query: SQL query string with named (:param_name) or positional ($1, $2) parameters
@@ -271,7 +270,7 @@ class QueryExecutor:
             metadata: Report metadata containing parameter definitions
 
         Returns:
-            DataFrame with query results
+            List of dictionaries with query results (NULL values are None)
         """
         async with self.pool.acquire() as conn:
             try:
@@ -286,13 +285,8 @@ class QueryExecutor:
                 # Execute query with positional parameters
                 rows = await conn.fetch(converted_query, *positional_params)
 
-                # Convert to DataFrame
-                if rows:
-                    columns = rows[0].keys()
-                    data = [dict(row) for row in rows]
-                    return pd.DataFrame(data, columns=columns)
-                else:
-                    return pd.DataFrame()
+                # Convert to list of dicts (asyncpg already converts NULL to None)
+                return [dict(row) for row in rows]
 
             except asyncpg.QueryCanceledError:
                 logger.error(f"Query execution timeout after {timeout} seconds")

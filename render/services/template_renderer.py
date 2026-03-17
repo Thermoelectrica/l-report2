@@ -2,9 +2,9 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict
+import locale
+from typing import Any, Dict, List
 
-import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
 from .repository import Report
@@ -26,10 +26,11 @@ class TemplateRenderer:
         )
 
         # Add custom filters
+        locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
         env.filters["format_number"] = lambda x: f"{x:,.2f}" if x is not None else ""
-        env.filters["format_date"] = lambda x: x.strftime("%Y-%m-%d") if x else ""
+        env.filters["format_date"] = lambda x: x.strftime("«%d» %B %Y г.") if x else ""
         env.filters["format_datetime"] = lambda x: (
-            x.strftime("%Y-%m-%d %H:%M:%S") if x else ""
+            x.strftime("«%d» %B %Y г. %H:%M") if x else ""
         )
 
         # Add S3 image URL filter
@@ -41,7 +42,7 @@ class TemplateRenderer:
         self,
         report: Report,
         parameters: Dict[str, Any],
-        query_results: Dict[str, pd.DataFrame],
+        query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str:
         """
         Render template with context.
@@ -49,7 +50,7 @@ class TemplateRenderer:
         Args:
             report: Report object with template
             parameters: User-provided parameters
-            query_results: Query results as DataFrames
+            query_results: Query results as list of dictionaries
 
         Returns:
             Rendered HTML string
@@ -67,9 +68,7 @@ class TemplateRenderer:
                     "version": report.metadata.version,
                 },
                 "params": parameters,
-                "queries": {
-                    name: df.to_dict("records") for name, df in query_results.items()
-                },
+                "queries": query_results,  
             }
 
             logger.info(f"Rendering template for report: {report.id}")
