@@ -6,7 +6,7 @@ A flexible PDF report generation service that executes SQL queries and renders t
 
 - 📊 **SQL-based Reports**: Define reports with SQL queries and Jinja2 templates
 - 🎨 **Beautiful PDFs**: Generate professional PDFs with WeasyPrint
-- ⚡ **Smart Caching**: 24-hour cache with parameter-based hashing
+- ⚡ **Smart Caching**: Configurable cache (default 5 minutes) with per-report overrides
 - 🔄 **Background Processing**: Async rendering with status polling
 - 💾 **Flexible Storage**: Filesystem or S3-compatible storage
 - 🖼️ **S3 Image Support**: Presigned URLs for images in reports
@@ -39,6 +39,7 @@ name: "Database Tables Report"
 description: "List all tables in the database"
 version: "1.0"
 timeout: 120
+cache_ttl_minutes: 10  # Optional: Override global cache TTL (default: 5 minutes)
 
 parameters:
   - name: schema_name
@@ -182,8 +183,22 @@ class RenderService(ABC):
 Reports are cached using SHA256 hash of `{report_id, parameters}`:
 
 - **Cache Key**: `sha256(json.dumps({"report_id": "...", "parameters": {...}}))`
-- **TTL**: 24 hours (configurable via `CACHE_TTL_HOURS`)
+- **Global TTL**: 5 minutes (configurable via `CACHE_TTL_MINUTES` environment variable)
+- **Per-Report TTL**: Override global TTL by setting `cache_ttl_minutes` in `metadata.yaml`
 - **Force Refresh**: Use `force_refresh=True` to bypass cache
+
+### Cache Configuration
+
+Set global cache TTL in `.env`:
+```bash
+CACHE_TTL_MINUTES=5  # Default: 5 minutes
+```
+
+Override for specific reports in `metadata.yaml`:
+```yaml
+name: "My Report"
+cache_ttl_minutes: 60  # Cache this report for 1 hour
+```
 
 ## Database Schema
 

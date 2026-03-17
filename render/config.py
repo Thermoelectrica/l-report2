@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # Defaults
     default_query_timeout: int = 300
     max_pdf_size_mb: int = 50
-    cache_ttl_hours: int = 24
+    cache_ttl_minutes: int = 5
 
     @property
     def data_db_url(self) -> str:

@@ -92,8 +92,14 @@ class TestRenderServiceImpl:
         """Test getting status when no render exists."""
         service = RenderServiceImpl()
 
-        with patch("render.services.render_service.AsyncSessionLocal") as mock_session:
+        # Mock repository to return metadata
+        mock_metadata = MagicMock()
+        mock_metadata.cache_ttl_minutes = None  # Use default
+
+        with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
+             patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
+            mock_repo.get_metadata.return_value = mock_metadata
 
             result = await service.getRenderStatus("test-report", {"param": "value"})
 
@@ -119,8 +125,14 @@ class TestRenderServiceImpl:
         db_session.add(render)
         await db_session.commit()
 
-        with patch("render.services.render_service.AsyncSessionLocal") as mock_session:
+        # Mock repository to return metadata
+        mock_metadata = MagicMock()
+        mock_metadata.cache_ttl_minutes = None  # Use default
+
+        with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
+             patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
+            mock_repo.get_metadata.return_value = mock_metadata
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -146,8 +158,14 @@ class TestRenderServiceImpl:
         db_session.add(render)
         await db_session.commit()
 
-        with patch("render.services.render_service.AsyncSessionLocal") as mock_session:
+        # Mock repository to return metadata
+        mock_metadata = MagicMock()
+        mock_metadata.cache_ttl_minutes = None  # Use default
+
+        with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
+             patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
+            mock_repo.get_metadata.return_value = mock_metadata
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -159,7 +177,7 @@ class TestRenderServiceImpl:
         self, db_session, sample_pdf_bytes
     ):
         """Test getting status for completed render with valid cache."""
-        service = RenderServiceImpl(cache_ttl_hours=24)
+        service = RenderServiceImpl(cache_ttl_minutes=1440)  # 24 hours
         params = {"test": "value"}
         cache_key = service._calculate_hash("test-report", params)
 
@@ -179,8 +197,14 @@ class TestRenderServiceImpl:
         mock_storage = AsyncMock()
         mock_storage.retrieve = AsyncMock(return_value=sample_pdf_bytes)
 
-        with patch("render.services.render_service.AsyncSessionLocal") as mock_session:
+        # Mock repository to return metadata
+        mock_metadata = MagicMock()
+        mock_metadata.cache_ttl_minutes = None  # Use default
+
+        with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
+             patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
+            mock_repo.get_metadata.return_value = mock_metadata
             service.storage = mock_storage
 
             result = await service.getRenderStatus("test-report", params)
@@ -192,12 +216,12 @@ class TestRenderServiceImpl:
     @pytest.mark.asyncio
     async def test_get_render_status_completed_expired_cache(self, db_session):
         """Test getting status for completed render with expired cache."""
-        service = RenderServiceImpl(cache_ttl_hours=24)
+        service = RenderServiceImpl(cache_ttl_minutes=1440)  # 24 hours
         params = {"test": "value"}
         cache_key = service._calculate_hash("test-report", params)
 
         # Create completed render (old)
-        old_time = datetime.utcnow() - timedelta(hours=25)
+        old_time = datetime.utcnow() - timedelta(minutes=1500)  # 25 hours ago
         render = Render(
             parameter_hash=cache_key,
             report_id="test-report",
@@ -209,8 +233,14 @@ class TestRenderServiceImpl:
         db_session.add(render)
         await db_session.commit()
 
-        with patch("render.services.render_service.AsyncSessionLocal") as mock_session:
+        # Mock repository to return metadata
+        mock_metadata = MagicMock()
+        mock_metadata.cache_ttl_minutes = None  # Use default
+
+        with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
+             patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
+            mock_repo.get_metadata.return_value = mock_metadata
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -240,6 +270,12 @@ class TestRenderServiceIntegration:
             # Setup mocks
             mock_report = MagicMock()
             mock_repo.get_report.return_value = mock_report
+            
+            # Mock metadata with cache_ttl_minutes
+            mock_metadata = MagicMock()
+            mock_metadata.cache_ttl_minutes = None  # Use default
+            mock_repo.get_metadata.return_value = mock_metadata
+            
             mock_qe.execute_queries = AsyncMock(return_value={"query": []})
             mock_tr.render.return_value = "<html>Test</html>"
             mock_pdf.generate = AsyncMock(return_value=b"%PDF-test")

@@ -82,6 +82,8 @@ class ReportMetadata(BaseModel):
         version: Report version string (default: "1.0")
         timeout: Optional maximum execution time in seconds. If rendering
                 exceeds this time, it should be terminated.
+        cache_ttl_minutes: Optional cache time-to-live in minutes. If specified,
+                          overrides the global cache TTL for this specific report.
         parameters: List of parameter definitions that the report accepts.
                    Use these to build input forms and validate user input.
     """
@@ -92,6 +94,9 @@ class ReportMetadata(BaseModel):
     version: str = "1.0"
     timeout: Optional[int] = Field(
         default=None, description="Maximum rendering time in seconds"
+    )
+    cache_ttl_minutes: Optional[int] = Field(
+        default=None, description="Cache time-to-live in minutes (overrides global setting)"
     )
     parameters: List[ReportParameter] = Field(
         default_factory=list, description="List of parameters this report accepts"

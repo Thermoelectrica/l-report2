@@ -32,14 +32,14 @@ logger = logging.getLogger(__name__)
 class RenderServiceImpl(RenderServiceInterface):
     """Implementation of RenderService interface."""
 
-    def __init__(self, cache_ttl_hours: int = 24):
+    def __init__(self, cache_ttl_minutes: int = 5):
         """
         Initialize render service.
 
         Args:
-            cache_ttl_hours: Cache time-to-live in hours
+            cache_ttl_minutes: Default cache time-to-live in minutes
         """
-        self.cache_ttl_hours = cache_ttl_hours
+        self.cache_ttl_minutes = cache_ttl_minutes
         self.storage = get_storage()
 
     def _calculate_hash(self, report_id: str, parameters: Dict[str, Any]) -> str:
@@ -122,6 +122,10 @@ class RenderServiceImpl(RenderServiceInterface):
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
 
+        # Get report metadata to check for per-report cache TTL
+        metadata = repository.get_metadata(report_id)
+        cache_ttl_minutes = metadata.cache_ttl_minutes or self.cache_ttl_minutes
+
         async with AsyncSessionLocal() as db:
             # Look up render record
             result = await db.execute(
@@ -135,7 +139,7 @@ class RenderServiceImpl(RenderServiceInterface):
 
             # Check if completed and not expired
             if render.status == RenderStatus.COMPLETED.value:
-                cutoff_time = datetime.utcnow() - timedelta(hours=self.cache_ttl_hours)
+                cutoff_time = datetime.utcnow() - timedelta(minutes=cache_ttl_minutes)
 
                 if render.completed_at and render.completed_at >= cutoff_time:
                     # Valid cached result - retrieve PDF
@@ -152,7 +156,7 @@ class RenderServiceImpl(RenderServiceInterface):
                         return RenderResult(status=RenderStatus.PENDING)
                 else:
                     # Expired cache
-                    logger.info(f"Cache expired for {cache_key[:8]}")
+                    logger.info(f"Cache expired for {cache_key[:8]} (TTL: {cache_ttl_minutes} minutes)")
                     return RenderResult(status=RenderStatus.PENDING)
 
             elif render.status == RenderStatus.FAILED.value:
@@ -183,12 +187,16 @@ class RenderServiceImpl(RenderServiceInterface):
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
 
+        # Get report metadata to check for per-report cache TTL
+        metadata = repository.get_metadata(report_id)
+        cache_ttl_minutes = metadata.cache_ttl_minutes or self.cache_ttl_minutes
+
         async with AsyncSessionLocal() as db:
             try:
                 # Check if we should skip rendering (cache hit and not force_refresh)
                 if not force_refresh:
                     cutoff_time = datetime.utcnow() - timedelta(
-                        hours=self.cache_ttl_hours
+                        minutes=cache_ttl_minutes
                     )
                     result = await db.execute(
                         select(Render).where(
@@ -201,7 +209,7 @@ class RenderServiceImpl(RenderServiceInterface):
                     )
                     cached = result.scalar_one_or_none()
                     if cached:
-                        logger.info(f"Using cached render for {cache_key[:8]}")
+                        logger.info(f"Using cached render for {cache_key[:8]} (TTL: {cache_ttl_minutes} minutes)")
                         # Return cached PDF
                         try:
                             pdf_bytes = await self.storage.retrieve(cache_key)

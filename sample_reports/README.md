@@ -91,6 +91,7 @@ name: "Report Display Name"
 description: "Optional description of what this report does"
 version: "1.0"
 timeout: 120  # Query timeout in seconds (optional)
+cache_ttl_minutes: 10  # Cache TTL in minutes (optional, overrides global default of 5 minutes)
 
 parameters:
   - name: schema_name
@@ -104,6 +105,16 @@ parameters:
     required: true
     description: "Table name to analyze"
 ```
+
+#### Metadata Properties
+- `name` - Human-readable report name (required)
+- `description` - Detailed description of the report (optional)
+- `version` - Report version string (default: "1.0")
+- `timeout` - Maximum query execution time in seconds (optional)
+- `cache_ttl_minutes` - Cache time-to-live in minutes for this specific report (optional).
+  If not specified, uses the global default (5 minutes). Set higher for reports with
+  slowly-changing data, lower for real-time reports.
+- `parameters` - List of parameter definitions (optional)
 
 #### Parameter Types
 - `string` - Text value
