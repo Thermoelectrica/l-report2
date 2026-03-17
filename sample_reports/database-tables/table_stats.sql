@@ -1,5 +1,5 @@
 -- Table statistics with row counts
-SELECT 
+SELECT
     schemaname as schema_name,
     relname as table_name,
     n_live_tup as estimated_rows,
@@ -9,5 +9,5 @@ SELECT
     last_analyze,
     last_autoanalyze
 FROM pg_stat_user_tables
-WHERE schemaname = COALESCE($1, 'public')
+WHERE schemaname = COALESCE(:schema_name, 'public')
 ORDER BY n_live_tup DESC;

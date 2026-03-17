@@ -9,3 +9,4 @@ parameters:
     required: false
     description: "Filter by specific schema (default: public)"
     default: "public"
+    enum_query: "schema_names_enum.sql"

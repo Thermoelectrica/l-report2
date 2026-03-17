@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ globals.report_name }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ globals.report_name }}</h1>
+    
+    <div class="metadata">
+        <p><strong>Generated:</strong> {{ globals.generated_at }}</p>
+        <p><strong>Version:</strong> {{ globals.version }}</p>
+    </div>
+    
+    <h2>Parameters Passed (Direct Access)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Parameter Name</th>
+                <th>Value</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>text_param</td>
+                <td>{{ params.text_param }}</td>
+                <td>{{ params.text_param.__class__.__name__ }}</td>
+            </tr>
+            <tr>
+                <td>date_param</td>
+                <td>{{ params.date_param }}</td>
+                <td>{{ params.date_param.__class__.__name__ }}</td>
+            </tr>
+            <tr>
+                <td>datetime_param</td>
+                <td>{{ params.datetime_param if params.datetime_param else '(not provided)' }}</td>
+                <td>{{ params.datetime_param.__class__.__name__ if params.datetime_param else 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td>boolean_param</td>
+                <td>{{ params.boolean_param }}</td>
+                <td>{{ params.boolean_param.__class__.__name__ }}</td>
+            </tr>
+            <tr>
+                <td>int_param</td>
+                <td>{{ params.int_param }}</td>
+                <td>{{ params.int_param.__class__.__name__ }}</td>
+            </tr>
+            <tr>
+                <td>float_param</td>
+                <td>{{ params.float_param }}</td>
+                <td>{{ params.float_param.__class__.__name__ }}</td>
+            </tr>
+            <tr>
+                <td>select_param</td>
+                <td>{{ params.select_param }}</td>
+                <td>{{ params.select_param.__class__.__name__ }}</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    {% if queries.data %}
+    <h2>Parameters from SQL Query Result</h2>
+    <table>
+        <thead>
+            <tr>
+                {% for key in queries.data[0].keys() %}
+                <th>{{ key }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in queries.data %}
+            <tr>
+                {% for value in row.values() %}
+                <td>{{ value }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    <div class="footer">
+        <p>Report ID: {{ globals.template_name }} | Generated: {{ globals.generated_at }}</p>
+    </div>
+</body>
+</html>

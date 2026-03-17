@@ -1,0 +1,49 @@
+name: "Simple Test Report"
+description: "A simple report with no parameters"
+version: "1.0"
+timeout: 60
+
+parameters:
+  - name: text_param
+    type: string
+    required: false
+    description: "Provide text value"
+    default: "text value"
+  - name: date_param
+    type: date
+    required: true
+    description: "Provide date"
+  - name: datetime_param
+    type: datetime
+    required: false
+    description: "Provide date and time"
+  - name: boolean_param
+    type: boolean
+    required: false
+    default: "True"
+    description: "Provide yes or no"
+  - name: int_param
+    type: integer
+    required: false
+    default: 42
+    description: "Provide answer to The Ultimate Question of Life, the Universe, and Everything)"
+  - name: float_param
+    type: float
+    required: false
+    default: 3.1415
+    description: "Current value of Pi constant"
+  - name: select_param
+    type: string
+    required: false
+    description: "Select triplet"
+    enum:
+      - "abc"
+      - "qwe"
+      - "xyz"
+    default: "abc"
+  - name: dynamic_select_param
+    type: string
+    required: false
+    description: "Select from dynamic list (fetched from database)"
+    enum_query: "enum_values.sql"
+    default: "option1"

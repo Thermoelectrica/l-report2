@@ -14,3 +14,4 @@ parameters:
     type: string
     required: true
     description: "Name of the table to analyze"
+    enum_query: "table_names_enum.sql"
