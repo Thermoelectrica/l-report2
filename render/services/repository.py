@@ -113,13 +113,23 @@ class ReportRepository:
         ]
 
     def get_report(self, report_id: str) -> Report:
-        """Get specific report by ID."""
-        if report_id not in self._reports:
+        """Get specific report by ID, reloading from disk each time."""
+        report_dir = self.reports_path / report_id
+        
+        if not report_dir.exists() or not report_dir.is_dir():
             raise ValueError(f"Report not found: {report_id}")
-        return self._reports[report_id]
+        
+        try:
+            # Reload the report from disk to pick up any changes
+            report = self._load_report(report_dir)
+            logger.info(f"Reloaded report from disk: {report_id}")
+            return report
+        except Exception as e:
+            logger.error(f"Failed to reload report {report_id}: {e}")
+            raise ValueError(f"Failed to load report {report_id}: {e}")
 
     def get_metadata(self, report_id: str) -> ReportMetadata:
-        """Get report metadata."""
+        """Get report metadata, reloading from disk each time."""
         return self.get_report(report_id).metadata
 
     def reload(self):
