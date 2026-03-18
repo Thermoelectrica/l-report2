@@ -99,7 +99,9 @@ class ReportRepository:
             name=metadata_dict.get("name", report_dir.name),
             description=metadata_dict.get("description"),
             version=metadata_dict.get("version", "1.0"),
+            format=metadata_dict["format"],  # Required field
             timeout=metadata_dict.get("timeout"),
+            cache_ttl_minutes=metadata_dict.get("cache_ttl_minutes"),
             parameters=parameters,
         )
 

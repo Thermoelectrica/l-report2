@@ -108,6 +108,7 @@ def sample_report_metadata() -> ReportMetadata:
         name="Test Report",
         description="A test report for unit testing",
         version="1.0",
+        format="weasyprint",
         timeout=60,
         parameters=[
             ReportParameter(
@@ -295,6 +296,8 @@ async def sample_render_record(db_session: AsyncSession) -> Render:
         report_id="test-report",
         parameters_json='{"start_date": "2024-01-01", "end_date": "2024-12-31"}',
         status=RenderStatus.PENDING.value,
+        output_format="weasyprint",
+        file_extension="pdf",
     )
     db_session.add(render)
     await db_session.commit()

@@ -80,6 +80,7 @@ class ReportMetadata(BaseModel):
         name: User-friendly display name
         description: Optional detailed description of what the report does
         version: Report version string (default: "1.0")
+        format: Output format generator to use (e.g., "weasyprint")
         timeout: Optional maximum execution time in seconds. If rendering
                 exceeds this time, it should be terminated.
         cache_ttl_minutes: Optional cache time-to-live in minutes. If specified,
@@ -92,6 +93,9 @@ class ReportMetadata(BaseModel):
     name: str
     description: Optional[str] = None
     version: str = "1.0"
+    format: str = Field(
+        description="Output format generator to use (weasyprint, pandoc-docx, etc.)"
+    )
     timeout: Optional[int] = Field(
         default=None, description="Maximum rendering time in seconds"
     )

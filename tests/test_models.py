@@ -90,9 +90,11 @@ class TestReportMetadata:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            format="weasyprint",
         )
         assert metadata.id == "test-report"
         assert metadata.name == "Test Report"
+        assert metadata.format == "weasyprint"
         assert metadata.version == "1.0"  # default
         assert metadata.parameters == []  # default
 
@@ -103,6 +105,7 @@ class TestReportMetadata:
             name="Sales Report",
             description="Monthly sales analysis",
             version="2.0",
+            format="weasyprint",
             timeout=300,
             parameters=[
                 ReportParameter(
@@ -114,6 +117,7 @@ class TestReportMetadata:
         )
         assert metadata.description == "Monthly sales analysis"
         assert metadata.version == "2.0"
+        assert metadata.format == "weasyprint"
         assert metadata.timeout == 300
         assert len(metadata.parameters) == 1
 
@@ -122,6 +126,7 @@ class TestReportMetadata:
         metadata = ReportMetadata(
             id="test",
             name="Test",
+            format="weasyprint",
             parameters=[
                 ReportParameter(
                     name="start_date", type=ParameterType.DATE, required=True
@@ -160,25 +165,26 @@ class TestRenderResult:
         """Test creating a pending result."""
         result = RenderResult(status=RenderStatus.PENDING)
         assert result.status == RenderStatus.PENDING
-        assert result.pdf_bytes is None
+        assert result.file_path is None
         assert result.error_message is None
 
     def test_running_result(self):
         """Test creating a running result."""
         result = RenderResult(status=RenderStatus.RUNNING)
         assert result.status == RenderStatus.RUNNING
-        assert result.pdf_bytes is None
+        assert result.file_path is None
         assert result.error_message is None
 
     def test_completed_result(self):
-        """Test creating a completed result with PDF."""
-        pdf_data = b"%PDF-1.4 test content"
+        """Test creating a completed result with file path."""
         result = RenderResult(
             status=RenderStatus.COMPLETED,
-            pdf_bytes=pdf_data,
+            file_path="abc123.pdf",
+            filename="report.pdf",
         )
         assert result.status == RenderStatus.COMPLETED
-        assert result.pdf_bytes == pdf_data
+        assert result.file_path == "abc123.pdf"
+        assert result.filename == "report.pdf"
         assert result.error_message is None
 
     def test_failed_result(self):
@@ -188,15 +194,17 @@ class TestRenderResult:
             error_message="Database connection failed",
         )
         assert result.status == RenderStatus.FAILED
-        assert result.pdf_bytes is None
+        assert result.file_path is None
         assert result.error_message == "Database connection failed"
 
     def test_result_serialization(self):
         """Test result can be serialized to dict."""
         result = RenderResult(
             status=RenderStatus.COMPLETED,
-            pdf_bytes=b"test",
+            file_path="test.pdf",
+            filename="report.pdf",
         )
         data = result.model_dump()
         assert data["status"] == RenderStatus.COMPLETED
-        assert data["pdf_bytes"] == b"test"
+        assert data["file_path"] == "test.pdf"
+        assert data["filename"] == "report.pdf"

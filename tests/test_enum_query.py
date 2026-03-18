@@ -86,6 +86,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            format="weasyprint",
             parameters=[
                 ReportParameter(
                     name="dynamic_param",
@@ -125,6 +126,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            format="weasyprint",
             parameters=[
                 ReportParameter(
                     name="static_param",
@@ -165,6 +167,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            format="weasyprint",
             parameters=[
                 ReportParameter(
                     name="dynamic_param",
@@ -202,6 +205,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            format="weasyprint",
             parameters=[
                 ReportParameter(
                     name="dynamic_param",

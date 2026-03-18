@@ -30,8 +30,20 @@ class Render(Base):
         comment="PENDING, RUNNING, COMPLETED, FAILED",
     )
 
-    pdf_path = Column(String(512), nullable=True, comment="Storage path to PDF file")
-    file_size_bytes = Column(Integer, nullable=True, comment="PDF file size in bytes")
+    # Output file information
+    output_format = Column(
+        String(50), nullable=False,
+        comment="Output format (weasyprint, docx, etc.)"
+    )
+    file_extension = Column(
+        String(10), nullable=False,
+        comment="File extension (pdf, docx, etc.)"
+    )
+    output_path = Column(
+        String(512), nullable=True,
+        comment="Storage path to output file"
+    )
+    file_size_bytes = Column(Integer, nullable=True, comment="Output file size in bytes")
 
     error_message = Column(
         Text, nullable=True, comment="Error details if status is FAILED"

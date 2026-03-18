@@ -1,6 +1,7 @@
 name: "Database Tables Report"
 description: "List all tables in the database with metadata (row counts, size, columns)"
 version: "1.0"
+format: "weasyprint"
 timeout: 120
 
 parameters:

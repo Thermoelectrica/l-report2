@@ -1,6 +1,7 @@
 name: "Table Details Report"
 description: "Detailed information about a specific database table including columns, indexes, and constraints"
 version: "1.0"
+format: "weasyprint"
 timeout: 120
 
 parameters:

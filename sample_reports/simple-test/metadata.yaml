@@ -1,6 +1,7 @@
 name: "Simple Test Report"
 description: "A simple report with no parameters"
 version: "1.0"
+format: "weasyprint"
 timeout: 60
 
 parameters:

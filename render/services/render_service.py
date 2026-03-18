@@ -21,7 +21,7 @@ from ..models import (
 )
 from ..storage import get_storage
 from .interface import RenderService as RenderServiceInterface
-from .pdf_generator import pdf_generator
+from .generator_registry import generator_registry
 from .query_executor import query_executor
 from .repository import repository
 from .template_renderer import template_renderer
@@ -143,16 +143,19 @@ class RenderServiceImpl(RenderServiceInterface):
 
                 if render.completed_at and render.completed_at >= cutoff_time:
                     # Valid cached result - return file path
-                    if render.pdf_path:
-                        filename = f"{cache_key}.pdf"
+                    if render.output_path:
+                        # Use file extension from database
+                        file_ext = render.file_extension
+                        
+                        filename = f"{cache_key}.{file_ext}"
                         return RenderResult(
                             status=RenderStatus.COMPLETED,
                             file_path=filename,
-                            filename=f"{report_id}.pdf"
+                            filename=f"{report_id}.{file_ext}"
                         )
                     else:
                         logger.warning(
-                            f"PDF path not found for cache key {cache_key[:8]}"
+                            f"Output path not found for cache key {cache_key[:8]}"
                         )
                         # Mark as pending to trigger re-render
                         return RenderResult(status=RenderStatus.PENDING)
@@ -212,17 +215,20 @@ class RenderServiceImpl(RenderServiceInterface):
                     cached = result.scalar_one_or_none()
                     if cached:
                         logger.info(f"Using cached render for {cache_key[:8]} (TTL: {cache_ttl_minutes} minutes)")
-                        # Return cached PDF path
-                        if cached.pdf_path:
-                            filename = f"{cache_key}.pdf"
+                        # Return cached output path
+                        if cached.output_path:
+                            # Use file extension from database
+                            file_ext = cached.file_extension
+                            
+                            filename = f"{cache_key}.{file_ext}"
                             return RenderResult(
                                 status=RenderStatus.COMPLETED,
                                 file_path=filename,
-                                filename=f"{report_id}.pdf"
+                                filename=f"{report_id}.{file_ext}"
                             )
                         else:
                             logger.warning(
-                                f"Cached PDF path not found for {cache_key[:8]}, re-rendering"
+                                f"Cached output path not found for {cache_key[:8]}, re-rendering"
                             )
                             # Continue to re-render
 
@@ -247,6 +253,8 @@ class RenderServiceImpl(RenderServiceInterface):
                         parameters_json=json.dumps(params, default=str),
                         status=RenderStatus.RUNNING.value,
                         started_at=datetime.utcnow(),
+                        output_format=metadata.format,
+                        file_extension="pdf",  # Will be updated after generation
                     )
                     db.add(render)
 
@@ -254,39 +262,56 @@ class RenderServiceImpl(RenderServiceInterface):
 
                 # Get report
                 report = repository.get_report(report_id)
-                logger.info(f"Loaded report: {report_id}")
+                metadata = report.metadata
+                output_format = metadata.format
+                
+                logger.info(f"Loaded report: {report_id}, format: {output_format}")
+
+                # Get appropriate generator
+                generator = generator_registry.get_generator(output_format)
 
                 # Execute queries
                 query_results = await query_executor.execute_queries(report, params)
                 logger.info(f"Executed {len(query_results)} queries")
 
                 # Render template
-                html = template_renderer.render(report, params, query_results)
+                source_content = template_renderer.render(report, params, query_results)
                 logger.info("Template rendered successfully")
 
-                # Generate PDF
-                pdf_bytes = await pdf_generator.generate(html)
-                logger.info(f"PDF generated, size: {len(pdf_bytes)} bytes")
+                # Generate output using selected generator
+                output_bytes = await generator.generate(
+                    source_content=source_content,
+                    source_path=report.path,
+                    base_url=None
+                )
+                file_extension = generator.file_extension
+                
+                logger.info(
+                    f"Output generated, format: {output_format}, "
+                    f"size: {len(output_bytes)} bytes, extension: {file_extension}"
+                )
 
-                # Store PDF
-                pdf_path = await self.storage.save(cache_key, pdf_bytes)
-                logger.info(f"PDF stored at: {pdf_path}")
+                # Store output
+                output_path = await self.storage.save(cache_key, output_bytes)
+                logger.info(f"Output stored at: {output_path}")
 
                 # Update status to completed
                 render.status = RenderStatus.COMPLETED.value
                 render.completed_at = datetime.utcnow()
-                render.pdf_path = pdf_path
-                render.file_size_bytes = len(pdf_bytes)
+                render.output_path = output_path
+                render.output_format = output_format
+                render.file_extension = file_extension
+                render.file_size_bytes = len(output_bytes)
                 await db.commit()
 
                 logger.info(f"Render completed successfully: {cache_key[:8]}")
 
                 # Return successful result with file path
-                filename = f"{cache_key}.pdf"
+                filename = f"{cache_key}.{file_extension}"
                 return RenderResult(
                     status=RenderStatus.COMPLETED,
                     file_path=filename,
-                    filename=f"{report_id}.pdf"
+                    filename=f"{report_id}.{file_extension}"
                 )
 
             except Exception as e:

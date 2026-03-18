@@ -95,6 +95,7 @@ class TestRenderServiceImpl:
         # Mock repository to return metadata
         mock_metadata = MagicMock()
         mock_metadata.cache_ttl_minutes = None  # Use default
+        mock_metadata.format = "weasyprint"
 
         with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
              patch("render.services.render_service.repository") as mock_repo:
@@ -104,7 +105,7 @@ class TestRenderServiceImpl:
             result = await service.getRenderStatus("test-report", {"param": "value"})
 
             assert result.status == RenderStatus.PENDING
-            assert result.pdf_bytes is None
+            assert result.file_path is None
             assert result.error_message is None
 
     @pytest.mark.asyncio
@@ -121,6 +122,8 @@ class TestRenderServiceImpl:
             parameters_json='{"test": "value"}',
             status=RenderStatus.RUNNING.value,
             started_at=datetime.utcnow(),
+            output_format="weasyprint",
+            file_extension="pdf",
         )
         db_session.add(render)
         await db_session.commit()
@@ -128,6 +131,7 @@ class TestRenderServiceImpl:
         # Mock repository to return metadata
         mock_metadata = MagicMock()
         mock_metadata.cache_ttl_minutes = None  # Use default
+        mock_metadata.format = "weasyprint"
 
         with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
              patch("render.services.render_service.repository") as mock_repo:
@@ -154,6 +158,8 @@ class TestRenderServiceImpl:
             status=RenderStatus.FAILED.value,
             error_message=error_msg,
             completed_at=datetime.utcnow(),
+            output_format="weasyprint",
+            file_extension="pdf",
         )
         db_session.add(render)
         await db_session.commit()
@@ -161,6 +167,7 @@ class TestRenderServiceImpl:
         # Mock repository to return metadata
         mock_metadata = MagicMock()
         mock_metadata.cache_ttl_minutes = None  # Use default
+        mock_metadata.format = "weasyprint"
 
         with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
              patch("render.services.render_service.repository") as mock_repo:
@@ -188,7 +195,9 @@ class TestRenderServiceImpl:
             parameters_json='{"test": "value"}',
             status=RenderStatus.COMPLETED.value,
             completed_at=datetime.utcnow(),  # Just completed
-            pdf_path="/path/to/pdf",
+            output_path="/path/to/output",
+            output_format="weasyprint",
+            file_extension="pdf",
         )
         db_session.add(render)
         await db_session.commit()
@@ -200,18 +209,25 @@ class TestRenderServiceImpl:
         # Mock repository to return metadata
         mock_metadata = MagicMock()
         mock_metadata.cache_ttl_minutes = None  # Use default
+        mock_metadata.format = "weasyprint"
+
+        # Mock generator
+        mock_generator = MagicMock()
+        mock_generator.file_extension = "pdf"
 
         with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
-             patch("render.services.render_service.repository") as mock_repo:
+             patch("render.services.render_service.repository") as mock_repo, \
+             patch("render.services.render_service.generator_registry") as mock_registry:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_registry.get_generator.return_value = mock_generator
             service.storage = mock_storage
 
             result = await service.getRenderStatus("test-report", params)
 
             assert result.status == RenderStatus.COMPLETED
-            assert result.pdf_bytes == sample_pdf_bytes
-            mock_storage.retrieve.assert_called_once_with(cache_key)
+            assert result.file_path == f"{cache_key}.pdf"
+            assert result.filename == "test-report.pdf"
 
     @pytest.mark.asyncio
     async def test_get_render_status_completed_expired_cache(self, db_session):
@@ -228,7 +244,9 @@ class TestRenderServiceImpl:
             parameters_json='{"test": "value"}',
             status=RenderStatus.COMPLETED.value,
             completed_at=old_time,
-            pdf_path="/path/to/pdf",
+            output_path="/path/to/output",
+            output_format="weasyprint",
+            file_extension="pdf",
         )
         db_session.add(render)
         await db_session.commit()
@@ -236,6 +254,7 @@ class TestRenderServiceImpl:
         # Mock repository to return metadata
         mock_metadata = MagicMock()
         mock_metadata.cache_ttl_minutes = None  # Use default
+        mock_metadata.format = "weasyprint"
 
         with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
              patch("render.services.render_service.repository") as mock_repo:
@@ -262,13 +281,16 @@ class TestRenderServiceIntegration:
         ) as mock_qe, patch(
             "render.services.render_service.template_renderer"
         ) as mock_tr, patch(
-            "render.services.render_service.pdf_generator"
-        ) as mock_pdf, patch(
+            "render.services.render_service.generator_registry"
+        ) as mock_registry, patch(
             "render.services.render_service.AsyncSessionLocal"
         ) as mock_session:
 
             # Setup mocks
             mock_report = MagicMock()
+            mock_report.path = MagicMock()
+            mock_report.metadata = MagicMock()
+            mock_report.metadata.format = "weasyprint"
             mock_repo.get_report.return_value = mock_report
             
             # Mock metadata with cache_ttl_minutes
@@ -276,9 +298,14 @@ class TestRenderServiceIntegration:
             mock_metadata.cache_ttl_minutes = None  # Use default
             mock_repo.get_metadata.return_value = mock_metadata
             
+            # Mock generator
+            mock_generator = MagicMock()
+            mock_generator.generate = AsyncMock(return_value=b"%PDF-test")
+            mock_generator.file_extension = "pdf"
+            mock_registry.get_generator.return_value = mock_generator
+            
             mock_qe.execute_queries = AsyncMock(return_value={"query": []})
             mock_tr.render.return_value = "<html>Test</html>"
-            mock_pdf.generate = AsyncMock(return_value=b"%PDF-test")
             mock_storage = AsyncMock()
             mock_storage.save = AsyncMock(return_value="/path/to/pdf")
             service.storage = mock_storage
@@ -296,7 +323,8 @@ class TestRenderServiceIntegration:
 
             # Verify workflow
             assert result.status == RenderStatus.COMPLETED
-            assert result.pdf_bytes == b"%PDF-test"
+            assert result.file_path.endswith(".pdf")
+            assert result.filename == "test-report.pdf"
 
     def test_hash_consistency_across_service_calls(self):
         """Test hash remains consistent across multiple service calls."""

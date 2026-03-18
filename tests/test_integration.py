@@ -26,6 +26,7 @@ class TestReportWorkflow:
 name: "Integration Test Report"
 description: "Test report for integration testing"
 version: "1.0"
+format: "weasyprint"
 parameters:
   - name: start_date
     type: date
@@ -110,7 +111,7 @@ ORDER BY tablename;
         report_dir = temp_reports_dir / "filter-test"
         report_dir.mkdir()
 
-        (report_dir / "metadata.yaml").write_text("name: Filter Test\n")
+        (report_dir / "metadata.yaml").write_text("name: Filter Test\nformat: weasyprint\n")
         (report_dir / "index.html.j2").write_text("""
 <html>
 <body>
@@ -141,7 +142,7 @@ ORDER BY tablename;
         report_dir = temp_reports_dir / "multi-query"
         report_dir.mkdir()
 
-        (report_dir / "metadata.yaml").write_text("name: Multi Query\n")
+        (report_dir / "metadata.yaml").write_text("name: Multi Query\nformat: weasyprint\n")
         (report_dir / "index.html.j2").write_text("""
 <html>
 <body>
@@ -185,6 +186,7 @@ class TestEndToEndScenarios:
             (report_dir / "metadata.yaml").write_text(f"""
 name: "Report {i}"
 description: "Test report {i}"
+format: "weasyprint"
 parameters:
   - name: param{i}
     type: string
@@ -215,6 +217,7 @@ parameters:
 
         (report_dir / "metadata.yaml").write_text("""
 name: "Parameter Test"
+format: "weasyprint"
 parameters:
   - name: required_param
     type: string
