@@ -7,6 +7,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List
+from pydantic import BaseModel
 
 import reflex as rx
 
@@ -68,7 +69,7 @@ async def ensure_services_initialized():
                 raise
 
 
-class ParamInfo(rx.Base):
+class ParamInfo(BaseModel):
     """Parameter information for UI rendering."""
 
     name: str
@@ -493,7 +494,7 @@ def report_details_panel() -> rx.Component:
                 State.render_error != "",
                 rx.callout(
                     State.render_error,
-                    icon="alert-triangle",
+                    icon="badge_alert",
                     color_scheme="red",
                     width="100%",
                 ),
