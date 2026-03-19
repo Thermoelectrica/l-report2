@@ -456,7 +456,7 @@ def report_details_panel() -> rx.Component:
                     ),
                     # Submit button
                     rx.button(
-                        "Generate PDF",
+                        "Generate",
                         type="submit",
                         disabled=State.is_rendering,
                         size="3",

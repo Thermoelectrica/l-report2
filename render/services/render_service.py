@@ -292,7 +292,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 )
 
                 # Store output
-                output_path = await self.storage.save(cache_key, output_bytes)
+                output_path = await self.storage.save(cache_key, output_bytes, file_extension)
                 logger.info(f"Output stored at: {output_path}")
 
                 # Update status to completed

@@ -7,13 +7,14 @@ class StorageBackend(ABC):
     """Abstract base class for storage backends."""
 
     @abstractmethod
-    async def save(self, cache_key: str, pdf_bytes: bytes) -> str:
+    async def save(self, cache_key: str, pdf_bytes: bytes, file_extension: str) -> str:
         """
-        Save PDF and return storage path.
+        Save output file and return storage path.
 
         Args:
             cache_key: Unique cache key (parameter hash)
-            pdf_bytes: PDF file content as bytes
+            pdf_bytes: File content as bytes
+            file_extension: File extension
 
         Returns:
             Storage path or URL where the file was saved
