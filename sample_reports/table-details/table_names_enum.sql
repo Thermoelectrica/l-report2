@@ -4,7 +4,7 @@ SELECT
 FROM
     information_schema.tables
 WHERE
-    table_schema = 'public'
+    table_schema = COALESCE(:schema_name, 'public')
     AND table_type = 'BASE TABLE'
 ORDER BY
     table_name;

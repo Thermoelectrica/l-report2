@@ -100,6 +100,10 @@ class State(rx.State):
 
     # Current render params (for background task)
     _current_render_params: Dict[str, Any] = {}
+    
+    # Parameter dependency tracking
+    current_param_values: Dict[str, Any] = {}
+    param_dependencies: Dict[str, List[str]] = {}
 
     @rx.event
     async def load_reports(self):
@@ -140,6 +144,15 @@ class State(rx.State):
                 )
                 for p in metadata.parameters
             ]
+            
+            # Initialize current parameter values with defaults
+            self.current_param_values = {
+                p.name: p.default for p in metadata.parameters
+            }
+            
+            # Load parameter dependency graph from service
+            self.param_dependencies = await render_service.getParameterDependencies(report_id)
+            logger.info(f"Loaded parameter dependencies: {self.param_dependencies}")
 
             # Reset render state
             self.render_status = ""
@@ -149,6 +162,56 @@ class State(rx.State):
 
         except Exception as e:
             self.render_error = f"Failed to load report metadata: {str(e)}"
+            logger.error(f"Error in select_report: {e}", exc_info=True)
+
+    @rx.event
+    async def handle_input_changed(self, parameter_name: str, value: Any):
+        """Handle parameter value changes and refresh dependent enum queries."""
+        logger.info(f"Input {parameter_name} value changed to {value}")
+        
+        try:
+            # Ensure services are initialized
+            await ensure_services_initialized()
+            
+            # Update current parameter values
+            self.current_param_values[parameter_name] = value
+            
+            # Check if any parameters depend on this one
+            dependent_params = self.param_dependencies.get(parameter_name, [])
+            
+            if not dependent_params:
+                logger.info(f"No dependent parameters for {parameter_name}")
+                return
+            
+            logger.info(f"Refreshing enum values for dependent parameters: {dependent_params}")
+            
+            # Refresh enum values for each dependent parameter
+            for param_name in dependent_params:
+                try:
+                    new_enum_values = await render_service.refreshEnumValues(
+                        self.selected_report_id,
+                        param_name,
+                        self.current_param_values
+                    )
+                    
+                    # Update the parameter's enum values in state
+                    for param_info in self.report_parameters:
+                        if param_info.name == param_name:
+                            param_info.enum_values = new_enum_values
+                            logger.info(
+                                f"Updated enum values for {param_name}: {len(new_enum_values)} values"
+                            )
+                            break
+                            
+                except Exception as e:
+                    logger.error(
+                        f"Failed to refresh enum values for {param_name}: {e}",
+                        exc_info=True
+                    )
+                    # Continue with other dependent parameters
+                    
+        except Exception as e:
+            logger.error(f"Error in handle_input_changed: {e}", exc_info=True)
 
     @rx.event
     async def handle_submit(self, form_data: dict):
@@ -338,6 +401,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 placeholder=f"Enter {param.name}",
                 type="date",
                 required=param.required,
+                on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
         ),
         (
@@ -348,6 +412,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 placeholder=f"Enter {param.name}",
                 type="datetime-local",
                 required=param.required,
+                on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
         ),
         (
@@ -360,6 +425,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                     type="number",
                     step="1",
                     required=param.required,
+                    on_change=lambda v: State.handle_input_changed(param.name, v)
                 ),
                 rx.badge(
                     "Integer only",
@@ -379,6 +445,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 type="number",
                 step="any",
                 required=param.required,
+                on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
         ),
         (
@@ -396,6 +463,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 name=param.name,
                 default_value=param.default_value,
                 placeholder=f"Select {param.name}",
+                on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
             # Plain text box
             rx.input(
@@ -405,6 +473,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 type="text",
                 width="48%",
                 required=param.required,
+                on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
         ),
     )

@@ -145,3 +145,63 @@ class RenderService(ABC):
             ...     print(f"Error: {result.error_message}")
         """
         pass
+
+    @abstractmethod
+    async def getParameterDependencies(self, report_id: str) -> Dict[str, List[str]]:
+        """Get dependency graph showing which parameters affect which enum queries.
+
+        Analyzes enum_query SQL files to determine which parameters are used in each
+        enum query, then builds a reverse mapping showing which parameters, when changed,
+        require refreshing other parameters' enum values.
+
+        Args:
+            report_id: Unique identifier of the report
+
+        Returns:
+            Dictionary mapping parameter names to list of dependent parameter names.
+            Example: {"schema_name": ["table_name"]} means when schema_name changes,
+            table_name's enum values need to be refreshed.
+
+        Raises:
+            ValueError: If report_id does not exist
+
+        Example:
+            >>> deps = await service.getParameterDependencies("table-details")
+            >>> print(deps)
+            {"schema_name": ["table_name"]}
+        """
+        pass
+
+    @abstractmethod
+    async def refreshEnumValues(
+        self, report_id: str, param_name: str, current_params: Dict[str, Any]
+    ) -> List[Any]:
+        """Refresh enum values for a specific parameter based on current parameter values.
+
+        Re-executes the enum_query for the specified parameter using the current
+        values of all parameters. This allows dynamic dropdowns that update based
+        on other parameter selections.
+
+        Args:
+            report_id: Unique identifier of the report
+            param_name: Name of the parameter whose enum values need refresh
+            current_params: Current values of all parameters (used for query binding)
+
+        Returns:
+            List of updated enum values from the first column of the query result.
+            Returns empty list if parameter has no enum_query or query fails.
+
+        Raises:
+            ValueError: If report_id or param_name does not exist
+
+        Example:
+            >>> # User changed schema_name to "myschema"
+            >>> new_tables = await service.refreshEnumValues(
+            ...     "table-details",
+            ...     "table_name",
+            ...     {"schema_name": "myschema", "table_name": None}
+            ... )
+            >>> print(new_tables)
+            ["users", "orders", "products"]
+        """
+        pass

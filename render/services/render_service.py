@@ -4,8 +4,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from copy import deepcopy
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List
 
 from sqlalchemy import and_, select
@@ -63,6 +65,29 @@ class RenderServiceImpl(RenderServiceInterface):
         """Get list of all available reports."""
         return repository.list_reports()
 
+    def _parse_enum_query_params(self, query_file: Path) -> List[str]:
+        """Extract parameter names from enum query SQL file.
+        
+        Args:
+            query_file: Path to SQL query file
+            
+        Returns:
+            List of unique parameter names found in the query
+        """
+        try:
+            with open(query_file, "r", encoding="utf-8") as f:
+                query = f.read()
+            
+            # Find all named parameters in the query (e.g., :schema_name)
+            # Exclude PostgreSQL type casts (::type) by using negative lookbehind
+            named_params = re.findall(r"(?<!:):(\w+)", query)
+            
+            # Return unique parameter names
+            return list(set(named_params))
+        except Exception as e:
+            logger.error(f"Failed to parse enum query file {query_file}: {e}")
+            return []
+
     async def getReportMetadata(self, report_id: str) -> ReportMetadata:
         """Get detailed metadata for a specific report with resolved dynamic enums."""
         # Get base metadata from repository
@@ -82,7 +107,19 @@ class RenderServiceImpl(RenderServiceInterface):
 
         logger.info(f"Resolving dynamic enums for report: {report_id}")
 
-        # Resolve dynamic enums
+        # Build initial parameter values (defaults or None)
+        # Convert defaults to proper types using query executor's conversion method
+        initial_params = {}
+        for param in metadata_copy.parameters:
+            if param.default is not None:
+                # Convert default value to proper type
+                initial_params[param.name] = query_executor._convert_default_value(
+                    param.default, param.type
+                )
+            else:
+                initial_params[param.name] = None
+
+        # Resolve dynamic enums and parse dependencies
         for param in metadata_copy.parameters:
             if param.enum_query:
                 logger.info(
@@ -99,9 +136,17 @@ class RenderServiceImpl(RenderServiceInterface):
                     continue
 
                 try:
-                    # Execute the enum query
+                    # Parse parameter dependencies from the SQL file
+                    param.enum_query_params = self._parse_enum_query_params(query_file)
+                    logger.info(
+                        f"Parameter {param.name} enum_query depends on: {param.enum_query_params}"
+                    )
+                    
+                    # Execute the enum query with initial parameter values
                     logger.info(f"Executing enum query from {query_file}")
-                    enum_values = await query_executor.execute_enum_query(query_file)
+                    enum_values = await query_executor.execute_enum_query(
+                        query_file, initial_params
+                    )
                     param.enum = enum_values
                     logger.info(
                         f"Resolved {len(enum_values)} enum values for parameter {param.name}: {enum_values[:5]}"
@@ -114,6 +159,94 @@ class RenderServiceImpl(RenderServiceInterface):
                     # Keep the parameter without enum values
 
         return metadata_copy
+
+    async def getParameterDependencies(self, report_id: str) -> Dict[str, List[str]]:
+        """Get dependency graph showing which parameters affect which enum queries.
+        
+        Args:
+            report_id: Report identifier
+            
+        Returns:
+            Dictionary mapping parameter names to list of dependent parameter names
+        """
+        # Get metadata (which includes parsed enum_query_params)
+        metadata = await self.getReportMetadata(report_id)
+        
+        # Build reverse dependency mapping
+        # Key: parameter that changes
+        # Value: list of parameters whose enum queries need refresh
+        dependencies: Dict[str, List[str]] = {}
+        
+        for param in metadata.parameters:
+            if param.enum_query and param.enum_query_params:
+                # This parameter has an enum query that depends on other parameters
+                for dependency_param in param.enum_query_params:
+                    if dependency_param not in dependencies:
+                        dependencies[dependency_param] = []
+                    # When dependency_param changes, param's enum needs refresh
+                    if param.name not in dependencies[dependency_param]:
+                        dependencies[dependency_param].append(param.name)
+        
+        logger.info(f"Parameter dependencies for {report_id}: {dependencies}")
+        return dependencies
+
+    async def refreshEnumValues(
+        self, report_id: str, param_name: str, current_params: Dict[str, Any]
+    ) -> List[Any]:
+        """Refresh enum values for a specific parameter based on current parameter values.
+        
+        Args:
+            report_id: Report identifier
+            param_name: Parameter whose enum values need refresh
+            current_params: Current values of all parameters
+            
+        Returns:
+            List of updated enum values
+        """
+        # Get report and metadata
+        report = repository.get_report(report_id)
+        metadata = repository.get_metadata(report_id)
+        
+        # Find the parameter definition
+        param_def = None
+        for param in metadata.parameters:
+            if param.name == param_name:
+                param_def = param
+                break
+        
+        if not param_def:
+            logger.warning(f"Parameter {param_name} not found in report {report_id}")
+            return []
+        
+        if not param_def.enum_query:
+            logger.warning(f"Parameter {param_name} has no enum_query")
+            return []
+        
+        # Get query file
+        query_file = report.path / param_def.enum_query
+        
+        if not query_file.exists():
+            logger.warning(f"Enum query file not found: {query_file}")
+            return []
+        
+        try:
+            # Execute enum query with current parameters
+            logger.info(
+                f"Refreshing enum values for {param_name} with params: {current_params}"
+            )
+            enum_values = await query_executor.execute_enum_query(
+                query_file, current_params
+            )
+            logger.info(
+                f"Refreshed {len(enum_values)} enum values for {param_name}: {enum_values[:5]}"
+            )
+            return enum_values
+        except Exception as e:
+            logger.error(
+                f"Failed to refresh enum values for {param_name}: {e}",
+                exc_info=True,
+            )
+            return []
 
     async def getRenderStatus(
         self, report_id: str, params: Dict[str, Any]

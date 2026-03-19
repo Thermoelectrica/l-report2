@@ -8,8 +8,9 @@ parameters:
   - name: schema_name
     type: string
     required: false
-    description: "Schema name (default: public)"
-    default: "public"
+    description: "Schema name"
+    default: "lesiv"
+    enum_query: "schema_names_enum.sql"
   
   - name: table_name
     type: string

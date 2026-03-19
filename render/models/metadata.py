@@ -64,6 +64,10 @@ class ReportParameter(BaseModel):
         default=None,
         description="SQL query file name to fetch enum values dynamically from database",
     )
+    enum_query_params: Optional[List[str]] = Field(
+        default=None,
+        description="List of parameter names that this enum_query depends on",
+    )
     default: Optional[Any] = Field(
         default=None, description="Default value if not provided"
     )
