@@ -205,3 +205,34 @@ class RenderService(ABC):
             ["users", "orders", "products"]
         """
         pass
+
+    @abstractmethod
+    async def generatePreview(
+        self, report_id: str, params: Dict[str, Any]
+    ) -> str:
+        """Generate HTML preview without converting to final format.
+
+        This method executes queries and renders the Jinja2 template to HTML,
+        but skips the final format conversion (PDF/DOCX). Useful for quick
+        preview during development or debugging. No caching is performed.
+
+        Args:
+            report_id: Unique identifier of the report
+            params: Dictionary of parameter values matching the report's
+                   parameter definitions
+
+        Returns:
+            Rendered HTML content as string
+
+        Raises:
+            ValueError: If report_id does not exist or parameters are invalid
+
+        Example:
+            >>> html = await service.generatePreview(
+            ...     "sales-report",
+            ...     {"start_date": "2024-01-01", "end_date": "2024-12-31"}
+            ... )
+            >>> with open("preview.html", "w") as f:
+            ...     f.write(html)
+        """
+        pass

@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import json
 import logging
 import sys
 from datetime import date, datetime
@@ -104,6 +105,9 @@ class State(rx.State):
     # Parameter dependency tracking
     current_param_values: Dict[str, Any] = {}
     param_dependencies: Dict[str, List[str]] = {}
+    
+    # Preview navigation state
+    _preview_mode: bool = False
 
     @rx.event
     async def load_reports(self):
@@ -215,7 +219,7 @@ class State(rx.State):
 
     @rx.event
     async def handle_submit(self, form_data: dict):
-        """Handle form submission and start PDF rendering."""
+        """Handle form submission - either preview or generate based on _preview_mode."""
         if not self.selected_report_id:
             self.render_error = "No report selected"
             return
@@ -227,22 +231,41 @@ class State(rx.State):
             # Convert form params to appropriate types
             typed_params = self._convert_params(form_data)
 
-            # Store params in state for background task
-            self._current_render_params = typed_params
+            # Check if this is preview mode
+            if self._preview_mode:
+                # Reset preview mode flag
+                self._preview_mode = False
+                # Navigate to preview page with parameters
+                # Use default=str to handle date/datetime objects
+                params_json = json.dumps(typed_params, default=str)
+                params_encoded = base64.urlsafe_b64encode(params_json.encode()).decode()
+                return rx.redirect(
+                    f"/preview?report_id={self.selected_report_id}&params={params_encoded}"
+                )
+            else:
+                # Handle generate
+                # Store params in state for background task
+                self._current_render_params = typed_params
 
-            # Reset state
-            self.render_status = "Starting render..."
-            self.render_error = ""
-            self.is_rendering = True
-            self.pdf_ready = False
+                # Reset state
+                self.render_status = "Starting render..."
+                self.render_error = ""
+                self.is_rendering = True
+                self.pdf_ready = False
 
-            # Start background render task
-            return State.render_report
+                # Start background render task
+                return State.render_report
 
         except Exception as e:
-            self.render_error = f"Failed to start render: {str(e)}"
+            self.render_error = f"Failed to start: {str(e)}"
             self.is_rendering = False
+            self._preview_mode = False
             logger.error(f"Error in handle_submit: {e}", exc_info=True)
+
+    @rx.event
+    def set_preview_mode(self):
+        """Set flag to indicate preview button was clicked."""
+        self._preview_mode = True
 
     @rx.event(background=True)
     async def render_report(self):
@@ -283,6 +306,12 @@ class State(rx.State):
                 self.render_error = f"Render error: {str(e)}"
                 self.is_rendering = False
                 logger.error(f"Error in render_report: {e}", exc_info=True)
+
+    @rx.event
+    def close_preview(self):
+        """Close the preview dialog."""
+        self.show_preview_dialog = False
+        self.preview_html = ""
 
     def _convert_params(self, form_data: dict) -> Dict[str, Any]:
         """Convert form string params to typed values."""
@@ -523,12 +552,26 @@ def report_details_panel() -> rx.Component:
                         ),
                         rx.text("No parameters required", size="2", color="gray"),
                     ),
-                    # Submit button
-                    rx.button(
-                        "Generate",
-                        type="submit",
-                        disabled=State.is_rendering,
-                        size="3",
+                    # Action buttons
+                    rx.hstack(
+                        rx.button(
+                            "Preview",
+                            type="submit",
+                            on_click=State.set_preview_mode,
+                            disabled=State.is_rendering,
+                            size="3",
+                            variant="soft",
+                            flex="1",
+                        ),
+                        rx.button(
+                            "Generate",
+                            type="submit",
+                            disabled=State.is_rendering,
+                            loading=State.is_rendering,
+                            size="3",
+                            flex="1",
+                        ),
+                        spacing="3",
                         width="100%",
                     ),
                     spacing="4",
@@ -650,5 +693,234 @@ def index() -> rx.Component:
     )
 
 
+class PreviewState(rx.State):
+    """State for the preview page."""
+    
+    # Preview data
+    preview_html: str = ""
+    is_loading: bool = False
+    error_message: str = ""
+    
+    # Decoded parameters for display
+    parameters_dict: Dict[str, Any] = {}
+    report_name: str = ""
+    report_id: str = ""
+    
+    @rx.event
+    async def load_preview(self):
+        """Load and generate preview from URL parameters."""
+        try:
+            # Ensure services are initialized
+            await ensure_services_initialized()
+            
+            self.is_loading = True
+            self.error_message = ""
+            
+            # Get URL parameters from router
+            report_id = self.router.page.params.get("report_id", "")
+            params_encoded = self.router.page.params.get("params", "")
+            
+            # Check if params is empty
+            if not params_encoded or not report_id:
+                self.error_message = "Missing report_id or params in URL"
+                self.is_loading = False
+                return
+            
+            self.report_id = report_id
+            
+            # Decode parameters (these are strings from JSON)
+            params_json = base64.urlsafe_b64decode(params_encoded.encode()).decode()
+            params_dict_str = json.loads(params_json)
+            self.parameters_dict = params_dict_str
+            
+            # Get report metadata for name and parameter types
+            metadata = await render_service.getReportMetadata(report_id)
+            self.report_name = metadata.name
+            
+            # Convert string parameters back to proper types
+            typed_params = self._convert_string_params(params_dict_str, metadata.parameters)
+            
+            # Generate preview with typed parameters
+            html_content = await render_service.generatePreview(
+                report_id, typed_params
+            )
+            
+            self.preview_html = html_content
+            self.is_loading = False
+            
+        except Exception as e:
+            self.error_message = f"Failed to generate preview: {str(e)}"
+            self.is_loading = False
+            logger.error(f"Error in load_preview: {e}", exc_info=True)
+    
+    def _convert_string_params(self, params_dict: Dict[str, Any], param_defs: List[ReportParameter]) -> Dict[str, Any]:
+        """Convert string parameters from JSON back to proper types."""
+        typed_params = {}
+        
+        for param_def in param_defs:
+            param_name = param_def.name
+            value_str = params_dict.get(param_name)
+            
+            if value_str is None:
+                continue
+            
+            # Convert based on type
+            try:
+                if param_def.type == ParameterType.STRING:
+                    typed_params[param_name] = str(value_str)
+                elif param_def.type == ParameterType.INTEGER:
+                    typed_params[param_name] = int(value_str)
+                elif param_def.type == ParameterType.FLOAT:
+                    typed_params[param_name] = float(value_str)
+                elif param_def.type == ParameterType.BOOLEAN:
+                    typed_params[param_name] = bool(value_str)
+                elif param_def.type == ParameterType.DATE:
+                    # Convert date string (YYYY-MM-DD) to date object
+                    if isinstance(value_str, str):
+                        typed_params[param_name] = datetime.strptime(value_str, "%Y-%m-%d").date()
+                    else:
+                        typed_params[param_name] = value_str
+                elif param_def.type == ParameterType.DATETIME:
+                    # Convert datetime string to datetime object
+                    if isinstance(value_str, str):
+                        # Try different formats
+                        for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M"]:
+                            try:
+                                typed_params[param_name] = datetime.strptime(value_str, fmt)
+                                break
+                            except ValueError:
+                                continue
+                    else:
+                        typed_params[param_name] = value_str
+                else:
+                    typed_params[param_name] = value_str
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to convert parameter {param_name}: {e}, using string value")
+                typed_params[param_name] = value_str
+        
+        return typed_params
+
+
+def preview_page() -> rx.Component:
+    """Preview page showing report parameters and HTML preview."""
+    return rx.container(
+        rx.color_mode.button(position="top-right"),
+        rx.vstack(
+            # Two-column layout
+            rx.cond(
+                PreviewState.is_loading,
+                # Loading state
+                rx.center(
+                    rx.vstack(
+                        rx.spinner(size="3"),
+                        rx.text("Generating preview...", size="3"),
+                        spacing="3",
+                    ),
+                    height="60vh",
+                ),
+                # Content
+                rx.cond(
+                    PreviewState.error_message != "",
+                    # Error state
+                    rx.callout(
+                        PreviewState.error_message,
+                        icon="badge_alert",
+                        color_scheme="red",
+                        width="100%",
+                    ),
+                    # Preview content
+                    rx.hstack(
+                        # Left column - Back button outside card, then card with report name and parameters
+                        rx.vstack(
+                            # Back button (outside card, full width)
+                            rx.link(
+                                rx.button(
+                                    rx.icon("arrow-left"),
+                                    "Back to Reports",
+                                    variant="soft",
+                                    width="100%",
+                                ),
+                                href="/",
+                                width="100%",
+                            ),
+                            # Card with report name and parameters
+                            rx.box(
+                                rx.vstack(
+                                    # Report name (left-aligned)
+                                    rx.heading(
+                                        PreviewState.report_name,
+                                        size="5",
+                                        text_align="left",
+                                    ),
+                                    rx.divider(),
+                                    # Parameters list (no heading)
+                                    rx.cond(
+                                        PreviewState.parameters_dict,
+                                        rx.vstack(
+                                            rx.foreach(
+                                                PreviewState.parameters_dict.items(),
+                                                lambda item: rx.box(
+                                                    rx.vstack(
+                                                        rx.text(
+                                                            item[0],
+                                                            size="2",
+                                                            weight="bold",
+                                                            color="gray",
+                                                        ),
+                                                        rx.text(
+                                                            item[1],
+                                                            size="2",
+                                                        ),
+                                                        spacing="1",
+                                                        align_items="start",
+                                                    ),
+                                                    padding="8px",
+                                                    border_radius="6px",
+                                                    background="var(--gray-2)",
+                                                    width="100%",
+                                                ),
+                                            ),
+                                            spacing="2",
+                                            width="100%",
+                                        ),
+                                        rx.text("No parameters", size="2", color="gray"),
+                                    ),
+                                    spacing="3",
+                                    align_items="start",
+                                    width="100%",
+                                ),
+                                padding="20px",
+                                border_radius="12px",
+                                border="1px solid var(--gray-5)",
+                                background="var(--gray-1)",
+                            ),
+                            spacing="3",
+                            width="25%",
+                        ),
+                        # Right column - HTML Preview (direct, no card)
+                        rx.box(
+                            rx.html(PreviewState.preview_html),
+                            width="75%",
+                            border="1px solid var(--gray-5)",
+                            border_radius="8px",
+                            padding="16px",
+                            background="white",
+                        ),
+                        spacing="4",
+                        width="100%",
+                        align_items="start",
+                    ),
+                ),
+            ),
+            spacing="4",
+            width="100%",
+            padding="20px",
+        ),
+        on_mount=PreviewState.load_preview,
+        size="4",
+    )
+
+
 app = rx.App()
 app.add_page(index)
+app.add_page(preview_page, route="/preview")

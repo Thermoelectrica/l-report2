@@ -468,6 +468,48 @@ class RenderServiceImpl(RenderServiceInterface):
                 # Return failed result
                 return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
 
+    async def generatePreview(
+        self, report_id: str, params: Dict[str, Any]
+    ) -> str:
+        """
+        Generate HTML preview without converting to final format.
+
+        This method executes queries and renders the Jinja2 template to HTML,
+        but skips the final format conversion (PDF/DOCX). Useful for quick
+        preview during development or debugging. No caching is performed.
+
+        Args:
+            report_id: Report identifier
+            params: User-provided parameters
+
+        Returns:
+            Rendered HTML content as string
+
+        Raises:
+            ValueError: If report_id does not exist
+            RuntimeError: If query execution or template rendering fails
+        """
+        try:
+            logger.info(f"Generating HTML preview for report: {report_id}")
+
+            # Get report
+            report = repository.get_report(report_id)
+            logger.info(f"Loaded report: {report_id}")
+
+            # Execute queries
+            query_results = await query_executor.execute_queries(report, params)
+            logger.info(f"Executed {len(query_results)} queries")
+
+            # Render template to HTML
+            html_content = template_renderer.render(report, params, query_results)
+            logger.info(f"Template rendered successfully, HTML length: {len(html_content)} chars")
+
+            return html_content
+
+        except Exception as e:
+            logger.error(f"Preview generation failed for {report_id}: {e}", exc_info=True)
+            raise RuntimeError(f"Preview generation failed: {e}")
+
 
 # Global render service instance
 render_service = RenderServiceImpl()
