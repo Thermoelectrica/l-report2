@@ -6,7 +6,35 @@ from report2.preview.preview_state import PreviewState
 def preview_page() -> rx.Component:
     """Preview page showing report parameters and HTML preview."""
     return rx.container(
-        rx.color_mode.button(position="top-right"),
+        # Add print-specific styles
+        rx.html(
+            """
+            <style>
+                @media print {
+                    .no-print {
+                        display: none !important;
+                    }
+                    .print-only {
+                        display: block !important;
+                    }
+                    .report-content {
+                        border: none !important;
+                        padding: 0 !important;
+                        background: transparent !important;
+                        width: 100% !important;
+                        max-width: none !important;
+                    }
+                    body, .rt-Container {
+                        max-width: none !important;
+                        width: 100% !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
+                }
+            </style>
+            """
+        ),
+        rx.color_mode.button(position="top-right", class_name="no-print"),
         rx.vstack(
             # Two-column layout
             rx.cond(
@@ -44,6 +72,7 @@ def preview_page() -> rx.Component:
                                 ),
                                 href="/",
                                 width="100%",
+                                class_name="no-print",
                             ),
                             # Card with report name and parameters
                             rx.box(
@@ -95,9 +124,21 @@ def preview_page() -> rx.Component:
                                 border_radius="12px",
                                 border="1px solid var(--gray-5)",
                                 background="var(--gray-1)",
+                                width="100%",
+                                class_name="no-print",
+                            ),
+                            # Print button (below parameters)
+                            rx.button(
+                                rx.icon("printer"),
+                                "Print Report",
+                                variant="solid",
+                                width="100%",
+                                on_click=PreviewState.print_report,
+                                class_name="no-print",
                             ),
                             spacing="3",
                             width="25%",
+                            class_name="no-print",
                         ),
                         # Right column - HTML Preview (direct, no card)
                         rx.box(
@@ -107,6 +148,7 @@ def preview_page() -> rx.Component:
                             border_radius="8px",
                             padding="16px",
                             background="white",
+                            class_name="report-content",
                         ),
                         spacing="4",
                         width="100%",

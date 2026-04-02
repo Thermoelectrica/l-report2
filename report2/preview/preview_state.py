@@ -24,6 +24,11 @@ class PreviewState(rx.State):
     report_id: str = ""
 
     @rx.event
+    def print_report(self):
+        """Trigger print dialog for the report."""
+        return rx.call_script("window.print()")
+
+    @rx.event
     async def load_preview(self):
         """Load and generate preview from URL parameters."""
         try:
