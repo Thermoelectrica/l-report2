@@ -1,9 +1,12 @@
 """Configuration for report2 application."""
 
 import os
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -11,7 +14,7 @@ class AuthConfig:
     """Authentication configuration."""
     
     api_base_url: str
-    jwt_public_key: str
+    jwt_public_key: Optional[str]
     
     @classmethod
     def from_env(cls) -> "AuthConfig":
@@ -24,12 +27,17 @@ class AuthConfig:
             raise ValueError("AUTH_API_BASE_URL environment variable is required")
         
         jwt_public_key = os.getenv("JWT_PUBLIC_KEY", "")
-        if not jwt_public_key:
-            raise ValueError("JWT_PUBLIC_KEY environment variable is required")
         
-        # Handle multiline public key from environment
-        # Replace literal \n with actual newlines
-        jwt_public_key = jwt_public_key.replace("\\n", "\n")
+        # Handle multiline public key from environment if provided
+        if jwt_public_key:
+            # Replace literal \n with actual newlines
+            jwt_public_key = jwt_public_key.replace("\\n", "\n")
+        else:
+            jwt_public_key = None
+            logger.warning(
+                "JWT_PUBLIC_KEY is not configured. JWT signature verification is DISABLED. "
+                "This is NOT secure for production environments!"
+            )
         
         return cls(
             api_base_url=api_base_url,
