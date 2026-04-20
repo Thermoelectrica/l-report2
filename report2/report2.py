@@ -9,6 +9,7 @@ import reflex as rx
 from render.config import settings
 from report2.main_page import index
 from report2.preview.preview_page import preview_page
+from report2.auth.login_page import login_page
 
 logger = logging.getLogger(__name__)
 
@@ -27,5 +28,6 @@ if Path(storage_path).resolve() != Path(upload_dir).resolve():
 logger.info(f"Storage path validated: {storage_path} matches Reflex upload directory")
 
 app = rx.App()
+app.add_page(login_page, route="/login")
 app.add_page(index)
 app.add_page(preview_page, route="/preview")

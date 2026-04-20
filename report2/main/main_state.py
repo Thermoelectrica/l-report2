@@ -9,9 +9,10 @@ from render import render_service
 from render.models import RenderStatus, ParameterType
 from report2.models import ParamInfo
 from report2.services import ensure_services_initialized, logger
+from report2.auth.auth_state import AuthState
 
 
-class State(rx.State):
+class State(AuthState):
     """Application state for PDF report generator."""
 
     # Report list
@@ -226,6 +227,9 @@ class State(rx.State):
                     if result.file_path:
                         download_url = rx.get_upload_url(result.file_path)
                         return rx.download(url=download_url, filename=f"{report_id}.pdf")
+                        download_url = f"/_upload/{result.file_path}"
+                        logger.warning(download_url)
+                        return rx.redirect(path=download_url, is_external=True)
                 elif result.status == RenderStatus.FAILED:
                     self.render_status = "Failed"
                     self.render_error = result.error_message or "Unknown error"

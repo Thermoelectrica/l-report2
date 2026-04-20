@@ -275,12 +275,40 @@ def index() -> rx.Component:
     return rx.container(
         rx.color_mode.button(position="top-right"),
         rx.vstack(
-            # Header
-            rx.heading("PDF Report Generator", size="8"),
-            rx.text(
-                "Select a report and configure parameters to generate PDF",
-                size="3",
-                color="gray",
+            # Header with user info and logout
+            rx.hstack(
+                rx.vstack(
+                    rx.heading("PDF Report Generator", size="8"),
+                    rx.text(
+                        "Select a report and configure parameters to generate PDF",
+                        size="3",
+                        color="gray",
+                    ),
+                    spacing="1",
+                    align_items="start",
+                ),
+                rx.spacer(),
+                rx.hstack(
+                    rx.cond(
+                        State.username != "",
+                        rx.text(
+                            State.username,
+                            size="2",
+                            weight="medium",
+                        ),
+                    ),
+                    rx.icon_button(
+                        rx.icon("log-out"),
+                        on_click=State.logout,
+                        size="2",
+                        variant="soft",
+                        color_scheme="red",
+                    ),
+                    spacing="3",
+                    align_items="center",
+                ),
+                width="100%",
+                align_items="center",
             ),
             # Two-column layout
             rx.hstack(
@@ -326,6 +354,6 @@ def index() -> rx.Component:
             width="100%",
             padding="20px",
         ),
-        on_mount=State.load_reports,
+        on_mount=[State.on_load, State.load_reports],
         size="4",
     )

@@ -1,0 +1,4175 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "L-Inspector Backend API",
+    "description": "REST API for L-Inspector mobile application",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Health check endpoint",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Login endpoint - authenticate user and return access and refresh tokens.\n\nArgs:\n    request: Login credentials (username, password, device_id)\n    conn: Database connection\n\nReturns:\n    LoginResponse with access_token and refresh_token\n\nRaises:\n    HTTPException: 401 if credentials are invalid",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "description": "Refresh endpoint - rotate refresh token and return new access and refresh tokens.\n\nImplements:\n- Token rotation: old token is revoked, new token is issued\n- Theft detection: if revoked token is reused, entire chain is revoked\n- Grace window: allows token reuse within a small time window for race conditions\n\nArgs:\n    request: Refresh token request\n    conn: Database connection\n\nReturns:\n    RefreshResponse with new access_token and refresh_token\n\nRaises:\n    HTTPException: 401 if refresh token is invalid, expired, or revoked",
+        "operationId": "refresh_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change Password",
+        "description": "Change password endpoint - requires authentication.\n\nVerifies old password, updates to new password, revokes all existing tokens,\nand returns a new token pair for the specified device.\n\nArgs:\n    request: Password change request (old_password, new_password, device_id)\n    current_user: Current authenticated user (from JWT token)\n    conn: Database connection\n\nReturns:\n    TokenResponse with new access_token and refresh_token\n\nRaises:\n    HTTPException: 409 if old password is invalid\n    HTTPException: 401 if not authenticated",
+        "operationId": "change_password_auth_change_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/auth/check": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Check Auth",
+        "description": "Check authentication endpoint - verifies if the user is authenticated.\n\nThis endpoint is protected by authentication and returns an empty response\nif the user is authenticated. If the user is not authenticated, the\nget_current_user dependency will raise a 401 Unauthorized error.\n\nArgs:\n    current_user: Current authenticated user (from JWT token)\n\nReturns:\n    Empty response with 204 No Content status\n\nRaises:\n    HTTPException: 401 if not authenticated",
+        "operationId": "check_auth_auth_check_get",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/inspector/all": {
+      "get": {
+        "tags": [
+          "inspector"
+        ],
+        "summary": "Get All Inspectors",
+        "description": "Get all inspectors (read-only, without password_hash), optionally filtered by modification date",
+        "operationId": "get_all_inspectors_inspector_all_get",
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return inspectors modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return inspectors modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectorListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "X-Auth-Token": []
+          }
+        ]
+      }
+    },
+    "/image/by_id/{image_id}": {
+      "get": {
+        "tags": [
+          "image"
+        ],
+        "summary": "Get Image By Id",
+        "description": "Get specific image by ID",
+        "operationId": "get_image_by_id_image_by_id__image_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Image"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/image/by_plant_id/{plant_id}": {
+      "get": {
+        "tags": [
+          "image"
+        ],
+        "summary": "Get Images By Plant Id",
+        "description": "Get all images for a plant, optionally filtered by modification date",
+        "operationId": "get_images_by_plant_id_image_by_plant_id__plant_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          },
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return images modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return images modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Image"
+                  },
+                  "title": "Response Get Images By Plant Id Image By Plant Id  Plant Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/image": {
+      "put": {
+        "tags": [
+          "image"
+        ],
+        "summary": "Upsert Image",
+        "description": "Create or replace image.\n\nRules:\n- force=false (default):\n  - Validates server_modified_at for existing images\n  - Ignores server_modified_at for new images\n- force=true:\n  - Ignores server_modified_at validation\n- Logical deletion via is_deleted flag (not implemented yet)\n- Permission: User must have access to the plant",
+        "operationId": "upsert_image_image_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, ignore server_modified_at validation",
+              "default": false,
+              "title": "Force"
+            },
+            "description": "If true, ignore server_modified_at validation"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Image"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Image"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/image/{image_id}/upload_url": {
+      "get": {
+        "tags": [
+          "image"
+        ],
+        "summary": "Get Upload Url",
+        "description": "Get a presigned URL for uploading an image to S3.\n\nThis endpoint generates a PUT presigned URL that allows clients to upload\nan image directly to S3. The URL is valid for a limited time as configured\nin the S3 service settings.\n\nArgs:\n    image_id: UUID of the image to upload\n    \nReturns:\n    PresignedUploadUrlResponse with the presigned URL and expiration time\n    \nRaises:\n    HTTPException: 500 if URL generation fails\n    HTTPException: 403 if user lacks plant access",
+        "operationId": "get_upload_url_image__image_id__upload_url_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUploadUrlResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/image/{image_id}/exists": {
+      "get": {
+        "tags": [
+          "image"
+        ],
+        "summary": "Check Image Exists",
+        "description": "Check if an image file exists in S3 storage.\n\nThis endpoint issues a HEAD request to S3 to verify if the image file\nexists without downloading the actual file content.\n\nArgs:\n    image_id: UUID of the image to check\n    \nReturns:\n    Dictionary with 'exists' boolean field\n    \nRaises:\n    HTTPException: 403 if user lacks plant access",
+        "operationId": "check_image_exists_image__image_id__exists_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Check Image Exists Image  Image Id  Exists Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/log": {
+      "post": {
+        "tags": [
+          "log"
+        ],
+        "summary": "Create Logs",
+        "description": "Batch insert log entries",
+        "operationId": "create_logs_log_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/LogEntry"
+                },
+                "type": "array",
+                "title": "Logs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "X-Auth-Token": []
+          }
+        ]
+      }
+    },
+    "/sticker-type/all": {
+      "get": {
+        "tags": [
+          "sticker-type"
+        ],
+        "summary": "Get All Sticker Types",
+        "description": "Get all sticker types with temperature ranges, optionally filtered by modification date",
+        "operationId": "get_all_sticker_types_sticker_type_all_get",
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return sticker types modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return sticker types modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StickerTypeListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "X-Auth-Token": []
+          }
+        ]
+      }
+    },
+    "/equipment-type/all": {
+      "get": {
+        "tags": [
+          "equipment-type"
+        ],
+        "summary": "Get All Equipment Types",
+        "description": "Get all equipment types with control point templates, optionally filtered by modification date",
+        "operationId": "get_all_equipment_types_equipment_type_all_get",
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return equipment types modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return equipment types modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EquipmentTypeListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "X-Auth-Token": []
+          }
+        ]
+      }
+    },
+    "/facility-template/all": {
+      "get": {
+        "tags": [
+          "facility-template"
+        ],
+        "summary": "Get All Facility Templates",
+        "description": "Get all facility templates with equipment templates, optionally filtered by modification date",
+        "operationId": "get_all_facility_templates_facility_template_all_get",
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return facility templates modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return facility templates modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityTemplateListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "X-Auth-Token": []
+          }
+        ]
+      }
+    },
+    "/defect-type/all": {
+      "get": {
+        "tags": [
+          "defect-type"
+        ],
+        "summary": "Get All Defect Types",
+        "description": "Get all defect types, optionally filtered by modification date",
+        "operationId": "get_all_defect_types_defect_type_all_get",
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return defect types modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return defect types modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefectTypeListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "X-Auth-Token": []
+          }
+        ]
+      }
+    },
+    "/plant/all": {
+      "get": {
+        "tags": [
+          "plant"
+        ],
+        "summary": "Get All Plants",
+        "description": "Get all plant IDs (lightweight list), optionally filtered by modification date and accessible to current user",
+        "operationId": "get_all_plants_plant_all_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return plants modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return plants modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plant/by_id/{plant_id}": {
+      "get": {
+        "tags": [
+          "plant"
+        ],
+        "summary": "Get Plant By Id",
+        "description": "Get specific plant with facilities and equipment IDs",
+        "operationId": "get_plant_by_id_plant_by_id__plant_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plant-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plant": {
+      "put": {
+        "tags": [
+          "plant"
+        ],
+        "summary": "Upsert Plant",
+        "description": "Create or replace plant with facilities.\n\nRules:\n- force=false (default):\n  - Validates server_modified_at for existing plants\n  - Rejects if extra child facilities exist on server (409)\n  - Ignores server_modified_at for new plants\n- force=true:\n  - Ignores server_modified_at validation\n  - Marks extra child facilities as deleted\n- Never allows \"stealing\" facilities from other plants\n- Pessimistic lock: Only the user who claimed the plant can modify it\n- Permission: User must have access to the plant",
+        "operationId": "upsert_plant_plant_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, ignore server_modified_at and mark extra children as deleted",
+              "default": false,
+              "title": "Force"
+            },
+            "description": "If true, ignore server_modified_at and mark extra children as deleted"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Plant-Input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plant-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plant/by_id/{plant_id}/claim": {
+      "post": {
+        "tags": [
+          "plant"
+        ],
+        "summary": "Claim Plant",
+        "description": "Claim plant for editing (user_id and device_id extracted from auth token).\n\nAllows claiming if:\n- Plant is not claimed\n- Plant is already claimed by the same user\n- Claim is stale (expired at 3:00 AM Moscow time)\n\nReturns 409 if plant is claimed by another user and claim is not stale.\nReturns the updated plant state with claim information.\nPermission: User must have access to the plant.",
+        "operationId": "claim_plant_plant_by_id__plant_id__claim_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plant-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plant/by_id/{plant_id}/release": {
+      "post": {
+        "tags": [
+          "plant"
+        ],
+        "summary": "Release Plant",
+        "description": "Release plant claim.\n\nReturns the updated plant state with cleared claim information.\nPermission: User must have access to the plant.",
+        "operationId": "release_plant_plant_by_id__plant_id__release_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plant-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/equipment/all": {
+      "get": {
+        "tags": [
+          "equipment"
+        ],
+        "summary": "Get All Equipment",
+        "description": "Get all equipment IDs (lightweight list), optionally filtered by modification date and accessible plants",
+        "operationId": "get_all_equipment_equipment_all_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return equipment modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return equipment modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EquipmentListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/equipment/by_id/{equipment_id}": {
+      "get": {
+        "tags": [
+          "equipment"
+        ],
+        "summary": "Get Equipment By Id",
+        "description": "Get specific equipment with control points, defects, and inspection IDs",
+        "operationId": "get_equipment_by_id_equipment_by_id__equipment_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "equipment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Equipment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Equipment-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/equipment/by_plant_id/{plant_id}": {
+      "get": {
+        "tags": [
+          "equipment"
+        ],
+        "summary": "Get Equipment By Plant Id",
+        "description": "Get all equipment for a plant (full aggregates with control points, defects, and inspection IDs), optionally filtered by modification date",
+        "operationId": "get_equipment_by_plant_id_equipment_by_plant_id__plant_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          },
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return equipment modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return equipment modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Equipment-Output"
+                  },
+                  "title": "Response Get Equipment By Plant Id Equipment By Plant Id  Plant Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/equipment": {
+      "put": {
+        "tags": [
+          "equipment"
+        ],
+        "summary": "Upsert Equipment",
+        "description": "Create or replace equipment with control points and defects.\n\nRules:\n- force=false (default):\n  - Validates server_modified_at for existing equipment\n  - Rejects if extra child entities exist on server (409)\n  - Ignores server_modified_at for new equipment\n- force=true:\n  - Ignores server_modified_at validation\n  - Marks extra child entities as deleted\n- Never allows \"stealing\" child entities from other equipment\n- Pessimistic lock: Only the user who claimed the parent plant can modify equipment\n- Permission: User must have access to the plant",
+        "operationId": "upsert_equipment_equipment_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, ignore server_modified_at and mark extra children as deleted",
+              "default": false,
+              "title": "Force"
+            },
+            "description": "If true, ignore server_modified_at and mark extra children as deleted"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Equipment-Input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Equipment-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inspection/all": {
+      "get": {
+        "tags": [
+          "inspection"
+        ],
+        "summary": "Get All Inspections",
+        "description": "Get all inspection IDs (lightweight list), optionally filtered by modification date and accessible plants",
+        "operationId": "get_all_inspections_inspection_all_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return inspections modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return inspections modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectionListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inspection/by_id/{inspection_id}": {
+      "get": {
+        "tags": [
+          "inspection"
+        ],
+        "summary": "Get Inspection By Id",
+        "description": "Get specific inspection with steps and image links",
+        "operationId": "get_inspection_by_id_inspection_by_id__inspection_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "inspection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Inspection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inspection-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inspection/by_plant_id/{plant_id}": {
+      "get": {
+        "tags": [
+          "inspection"
+        ],
+        "summary": "Get Inspections By Plant Id",
+        "description": "Get all inspections for plant (full aggregates with steps and image links), optionally filtered by modification date",
+        "operationId": "get_inspections_by_plant_id_inspection_by_plant_id__plant_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          },
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return inspections modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return inspections modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Inspection-Output"
+                  },
+                  "title": "Response Get Inspections By Plant Id Inspection By Plant Id  Plant Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inspection": {
+      "put": {
+        "tags": [
+          "inspection"
+        ],
+        "summary": "Upsert Inspection",
+        "description": "Create or replace inspection with steps and image links.\n\nRules:\n- force=false (default):\n  - Validates server_modified_at for existing inspection\n  - Rejects if extra child entities exist on server (409)\n  - Ignores server_modified_at for new inspection\n- force=true:\n  - Ignores server_modified_at validation\n  - Marks extra child entities as deleted\n- Never allows \"stealing\" child entities from other inspections\n- Pessimistic lock: Only the user who created the inspection can modify it\n- Permission: User must have access to the plant",
+        "operationId": "upsert_inspection_inspection_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, ignore server_modified_at and mark extra children as deleted",
+              "default": false,
+              "title": "Force"
+            },
+            "description": "If true, ignore server_modified_at and mark extra children as deleted"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Inspection-Input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inspection-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/defect/all": {
+      "get": {
+        "tags": [
+          "defect"
+        ],
+        "summary": "Get All Defects",
+        "description": "Get all defect IDs (lightweight list), optionally filtered by modification date and accessible plants",
+        "operationId": "get_all_defects_defect_all_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return defects modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return defects modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefectListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/defect/by_id/{defect_id}": {
+      "get": {
+        "tags": [
+          "defect"
+        ],
+        "summary": "Get Defect By Id",
+        "description": "Get specific defect",
+        "operationId": "get_defect_by_id_defect_by_id__defect_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "defect_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Defect Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__models__defect__Defect"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/defect/by_plant_id/{plant_id}": {
+      "get": {
+        "tags": [
+          "defect"
+        ],
+        "summary": "Get Defects By Plant Id",
+        "description": "Get all defects for a plant (full data), optionally filtered by modification date",
+        "operationId": "get_defects_by_plant_id_defect_by_plant_id__plant_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "plant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plant Id"
+            }
+          },
+          {
+            "name": "modified_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return defects modified after this timestamp",
+              "default": "1790-01-01T00:00:00Z",
+              "title": "Modified Since"
+            },
+            "description": "Only return defects modified after this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/app__models__defect__Defect"
+                  },
+                  "title": "Response Get Defects By Plant Id Defect By Plant Id  Plant Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/defect": {
+      "put": {
+        "tags": [
+          "defect"
+        ],
+        "summary": "Upsert Defect",
+        "description": "Create or replace defect.\n\nRules:\n- force=false (default):\n  - Validates server_modified_at for existing defects\n  - Ignores server_modified_at for new defects\n- force=true:\n  - Ignores server_modified_at validation\n\nNote: Defects are NOT owned by plant claims and can be modified by any authenticated user.\nThis is the key difference from equipment, which requires plant ownership.\nHowever, users must still have access to the plant.",
+        "operationId": "upsert_defect_defect_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, ignore server_modified_at validation",
+              "default": false,
+              "title": "Force"
+            },
+            "description": "If true, ignore server_modified_at validation"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__models__defect__Defect"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__models__defect__Defect"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessLevel": {
+        "type": "string",
+        "enum": [
+          "READ",
+          "INSPECT",
+          "MODIFY"
+        ],
+        "title": "AccessLevel",
+        "description": "Access level for inspectors.\n\n- READ: Can only perform GET operations\n- INSPECT: Can perform GET operations and add inspections/defects\n- MODIFY: Can perform all operations including claiming plants and modifying equipment"
+      },
+      "ControlPoint": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "control_point_type": {
+            "type": "string",
+            "title": "Control Point Type"
+          },
+          "point_count": {
+            "type": "integer",
+            "title": "Point Count"
+          },
+          "sticker_count": {
+            "type": "integer",
+            "title": "Sticker Count"
+          },
+          "sticker_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sticker Type Id"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "control_point_type",
+          "point_count",
+          "sticker_count"
+        ],
+        "title": "ControlPoint",
+        "description": "Control point within equipment (child entity)"
+      },
+      "ControlPointTemplate": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "equipment_type_id": {
+            "type": "integer",
+            "title": "Equipment Type Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "short_name": {
+            "type": "string",
+            "title": "Short Name"
+          },
+          "default_sticker_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Sticker Id"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "equipment_type_id",
+          "name",
+          "short_name"
+        ],
+        "title": "ControlPointTemplate",
+        "description": "Control point template for equipment type"
+      },
+      "DefectListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "equipment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Equipment Id"
+          },
+          "unit_name": {
+            "type": "string",
+            "title": "Unit Name"
+          },
+          "defect_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Type Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DefectStatus"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "equipment_id",
+          "unit_name",
+          "status",
+          "is_deleted"
+        ],
+        "title": "DefectListItem",
+        "description": "Lightweight defect item for list view"
+      },
+      "DefectListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DefectListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DefectListResponse",
+        "description": "Wrapped response for defect list with items key"
+      },
+      "DefectStatus": {
+        "type": "string",
+        "enum": [
+          "DETECTED",
+          "RESOLVED"
+        ],
+        "title": "DefectStatus",
+        "description": "Defect status enum"
+      },
+      "DefectType": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "short_name": {
+            "type": "string",
+            "title": "Short Name"
+          },
+          "t_max": {
+            "type": "integer",
+            "title": "T Max"
+          },
+          "t_excess": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Excess"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "short_name",
+          "t_max",
+          "server_modified_at"
+        ],
+        "title": "DefectType",
+        "description": "DefectType aggregate"
+      },
+      "DefectTypeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DefectType"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DefectTypeListResponse",
+        "description": "List of DefectType items"
+      },
+      "Equipment-Input": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "facility_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Facility Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "qr_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qr Code"
+          },
+          "is_container": {
+            "type": "boolean",
+            "title": "Is Container",
+            "default": false
+          },
+          "equipment_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Type Id"
+          },
+          "facility_template_equipment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facility Template Equipment Id"
+          },
+          "estimated_point_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Point Count"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "control_points": {
+            "items": {
+              "$ref": "#/components/schemas/ControlPoint"
+            },
+            "type": "array",
+            "title": "Control Points"
+          },
+          "defects": {
+            "items": {
+              "$ref": "#/components/schemas/app__models__equipment__Defect"
+            },
+            "type": "array",
+            "title": "Defects"
+          },
+          "inspection_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspection Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "facility_id",
+          "name",
+          "server_modified_at"
+        ],
+        "title": "Equipment",
+        "description": "Equipment aggregate root - read model"
+      },
+      "Equipment-Output": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "facility_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Facility Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "qr_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qr Code"
+          },
+          "is_container": {
+            "type": "boolean",
+            "title": "Is Container",
+            "default": false
+          },
+          "equipment_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Type Id"
+          },
+          "facility_template_equipment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facility Template Equipment Id"
+          },
+          "estimated_point_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Point Count"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "control_points": {
+            "items": {
+              "$ref": "#/components/schemas/ControlPoint"
+            },
+            "type": "array",
+            "title": "Control Points"
+          },
+          "defects": {
+            "items": {
+              "$ref": "#/components/schemas/app__models__equipment__Defect"
+            },
+            "type": "array",
+            "title": "Defects"
+          },
+          "inspection_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspection Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "facility_id",
+          "name",
+          "server_modified_at"
+        ],
+        "title": "Equipment",
+        "description": "Equipment aggregate root - read model"
+      },
+      "EquipmentListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "facility_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Facility Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_container": {
+            "type": "boolean",
+            "title": "Is Container"
+          },
+          "equipment_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Type Id"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "facility_id",
+          "name",
+          "is_container",
+          "is_deleted"
+        ],
+        "title": "EquipmentListItem",
+        "description": "Lightweight equipment item for list view"
+      },
+      "EquipmentListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "EquipmentListResponse",
+        "description": "Wrapped response for equipment list with items key"
+      },
+      "EquipmentType": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "control_point_templates": {
+            "items": {
+              "$ref": "#/components/schemas/ControlPointTemplate"
+            },
+            "type": "array",
+            "title": "Control Point Templates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "server_modified_at"
+        ],
+        "title": "EquipmentType",
+        "description": "EquipmentType aggregate with control point templates"
+      },
+      "EquipmentTypeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentType"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "EquipmentTypeListResponse",
+        "description": "List of EquipmentType items"
+      },
+      "Facility": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "facility_template_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facility Template Id"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "equipment_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "Facility",
+        "description": "Energy facility (part of plant) - read model"
+      },
+      "FacilityTemplate": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_multiple_allowed": {
+            "type": "boolean",
+            "title": "Is Multiple Allowed",
+            "default": false
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "equipment_templates": {
+            "items": {
+              "$ref": "#/components/schemas/FacilityTemplateEquipment"
+            },
+            "type": "array",
+            "title": "Equipment Templates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "server_modified_at"
+        ],
+        "title": "FacilityTemplate",
+        "description": "FacilityTemplate aggregate with equipment templates"
+      },
+      "FacilityTemplateEquipment": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_container": {
+            "type": "boolean",
+            "title": "Is Container",
+            "default": false
+          },
+          "equipment_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Type Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "FacilityTemplateEquipment",
+        "description": "Equipment template for facility template"
+      },
+      "FacilityTemplateListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FacilityTemplate"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "FacilityTemplateListResponse",
+        "description": "List of FacilityTemplate items"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Image": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "plant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Plant Id"
+          },
+          "original_file_name": {
+            "type": "string",
+            "title": "Original File Name"
+          },
+          "image_type": {
+            "$ref": "#/components/schemas/ImageType"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "presigned_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presigned Url"
+          },
+          "presigned_url_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presigned Url Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "plant_id",
+          "original_file_name",
+          "image_type",
+          "server_modified_at"
+        ],
+        "title": "Image",
+        "description": "Image aggregate"
+      },
+      "ImageLink": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Image Id"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id"
+        ],
+        "title": "ImageLink",
+        "description": "Image link within inspection step (child entity)"
+      },
+      "ImageType": {
+        "type": "string",
+        "enum": [
+          "VISUAL",
+          "THERMAL"
+        ],
+        "title": "ImageType",
+        "description": "Image type enum"
+      },
+      "Inspection-Input": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "equipment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Equipment Id"
+          },
+          "inspector_id": {
+            "type": "integer",
+            "title": "Inspector Id"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InspectionStatus",
+            "default": "PLANNED"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/InspectionStep-Input"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "equipment_id",
+          "inspector_id",
+          "started_at",
+          "server_modified_at"
+        ],
+        "title": "Inspection",
+        "description": "Inspection aggregate root"
+      },
+      "Inspection-Output": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "equipment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Equipment Id"
+          },
+          "inspector_id": {
+            "type": "integer",
+            "title": "Inspector Id"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InspectionStatus",
+            "default": "PLANNED"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/InspectionStep-Output"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "equipment_id",
+          "inspector_id",
+          "started_at",
+          "server_modified_at"
+        ],
+        "title": "Inspection",
+        "description": "Inspection aggregate root"
+      },
+      "InspectionListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "equipment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Equipment Id"
+          },
+          "inspector_id": {
+            "type": "integer",
+            "title": "Inspector Id"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InspectionStatus"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "equipment_id",
+          "inspector_id",
+          "started_at",
+          "status",
+          "is_deleted"
+        ],
+        "title": "InspectionListItem",
+        "description": "Lightweight inspection item for list view"
+      },
+      "InspectionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InspectionListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "InspectionListResponse",
+        "description": "Wrapped response for inspection list with items key"
+      },
+      "InspectionStatus": {
+        "type": "string",
+        "enum": [
+          "PLANNED",
+          "IN_PROGRESS",
+          "COMPLETED"
+        ],
+        "title": "InspectionStatus",
+        "description": "Inspection status enum"
+      },
+      "InspectionStep-Input": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "step_number": {
+            "type": "integer",
+            "title": "Step Number"
+          },
+          "step_type": {
+            "$ref": "#/components/schemas/InspectionStepType"
+          },
+          "defect_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Id"
+          },
+          "unit_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_resolved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Resolved"
+          },
+          "sticker_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sticker Type Id"
+          },
+          "t_sticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Sticker"
+          },
+          "t_environment": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Environment"
+          },
+          "t_similar_unit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Similar Unit"
+          },
+          "epsilon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Epsilon",
+            "default": "0.95"
+          },
+          "t_observed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Observed"
+          },
+          "measured_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Current"
+          },
+          "nominal_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal Current"
+          },
+          "defect_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Type Id"
+          },
+          "is_sticker_present": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Sticker Present"
+          },
+          "is_test_ready": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Test Ready"
+          },
+          "is_attention_required": {
+            "type": "boolean",
+            "title": "Is Attention Required",
+            "default": false
+          },
+          "step_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StepStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "image_links": {
+            "items": {
+              "$ref": "#/components/schemas/ImageLink"
+            },
+            "type": "array",
+            "title": "Image Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "started_at",
+          "step_number",
+          "step_type"
+        ],
+        "title": "InspectionStep",
+        "description": "Inspection step within inspection (child entity)"
+      },
+      "InspectionStep-Output": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "step_number": {
+            "type": "integer",
+            "title": "Step Number"
+          },
+          "step_type": {
+            "$ref": "#/components/schemas/InspectionStepType"
+          },
+          "defect_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Id"
+          },
+          "unit_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_resolved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Resolved"
+          },
+          "sticker_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sticker Type Id"
+          },
+          "t_sticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Sticker"
+          },
+          "t_environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Environment"
+          },
+          "t_similar_unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Similar Unit"
+          },
+          "epsilon": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Epsilon",
+            "default": "0.95"
+          },
+          "t_observed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Observed"
+          },
+          "measured_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Current"
+          },
+          "nominal_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal Current"
+          },
+          "defect_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Type Id"
+          },
+          "is_sticker_present": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Sticker Present"
+          },
+          "is_test_ready": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Test Ready"
+          },
+          "is_attention_required": {
+            "type": "boolean",
+            "title": "Is Attention Required",
+            "default": false
+          },
+          "step_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StepStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "image_links": {
+            "items": {
+              "$ref": "#/components/schemas/ImageLink"
+            },
+            "type": "array",
+            "title": "Image Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "started_at",
+          "step_number",
+          "step_type"
+        ],
+        "title": "InspectionStep",
+        "description": "Inspection step within inspection (child entity)"
+      },
+      "InspectionStepType": {
+        "type": "string",
+        "enum": [
+          "GENERAL_INSPECTION",
+          "DEFECT_REPORT",
+          "DEFECT_FOLLOW_UP",
+          "DEFECT_UNDECIDED"
+        ],
+        "title": "InspectionStepType",
+        "description": "Inspection step type enum"
+      },
+      "Inspector": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "full_name",
+          "username",
+          "server_modified_at"
+        ],
+        "title": "Inspector",
+        "description": "Inspector aggregate (read-only reference data)"
+      },
+      "InspectorListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Inspector"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "InspectorListResponse",
+        "description": "List of Inspector items"
+      },
+      "LogEntityType": {
+        "type": "string",
+        "enum": [
+          "INSPECTOR",
+          "PLANT",
+          "FACILITY",
+          "EQUIPMENT",
+          "INSPECTION",
+          "IMAGE"
+        ],
+        "title": "LogEntityType",
+        "description": "Log entity type enum"
+      },
+      "LogEntry": {
+        "properties": {
+          "logged_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Logged At"
+          },
+          "plant_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plant Id"
+          },
+          "inspector_id": {
+            "type": "integer",
+            "title": "Inspector Id"
+          },
+          "entity_id": {
+            "type": "string",
+            "title": "Entity Id"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/LogEntityType"
+          },
+          "op": {
+            "$ref": "#/components/schemas/LogOperation"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "logged_at",
+          "inspector_id",
+          "entity_id",
+          "entity_type",
+          "op",
+          "message"
+        ],
+        "title": "LogEntry",
+        "description": "Log entry model"
+      },
+      "LogOperation": {
+        "type": "string",
+        "enum": [
+          "CREATE",
+          "UPDATE",
+          "DELETE"
+        ],
+        "title": "LogOperation",
+        "description": "Log operation enum"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password",
+          "device_id"
+        ],
+        "title": "LoginRequest",
+        "description": "Login request payload"
+      },
+      "PasswordChangeRequest": {
+        "properties": {
+          "old_password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Old Password"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "New Password"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_password",
+          "new_password",
+          "device_id"
+        ],
+        "title": "PasswordChangeRequest",
+        "description": "Request for a password change"
+      },
+      "Plant-Input": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "claimed_by_device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed By Device Id"
+          },
+          "claimed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed By User Id"
+          },
+          "claimed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed At"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "facilities": {
+            "items": {
+              "$ref": "#/components/schemas/Facility"
+            },
+            "type": "array",
+            "title": "Facilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "server_modified_at"
+        ],
+        "title": "Plant",
+        "description": "Plant aggregate with facilities - read model"
+      },
+      "Plant-Output": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "claimed_by_device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed By Device Id"
+          },
+          "claimed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed By User Id"
+          },
+          "claimed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed At"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "facilities": {
+            "items": {
+              "$ref": "#/components/schemas/Facility"
+            },
+            "type": "array",
+            "title": "Facilities"
+          },
+          "is_stale": {
+            "type": "boolean",
+            "title": "Is Stale",
+            "description": "Indicates if the claim is stale (can be overridden by another user).\nA claim becomes stale at 3:00 AM Moscow time each day.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "server_modified_at",
+          "is_stale"
+        ],
+        "title": "Plant",
+        "description": "Plant aggregate with facilities - read model"
+      },
+      "PlantListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "claimed_by_device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed By Device Id"
+          },
+          "claimed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed By User Id"
+          },
+          "claimed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed At"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "is_stale": {
+            "type": "boolean",
+            "title": "Is Stale",
+            "description": "Indicates if the claim is stale (can be overridden by another user).\nA claim becomes stale at 3:00 AM Moscow time each day.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "server_modified_at",
+          "is_stale"
+        ],
+        "title": "PlantListItem",
+        "description": "Lightweight plant item for list view"
+      },
+      "PlantListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlantListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PlantListResponse",
+        "description": "Wrapped response for plant list with items key"
+      },
+      "PresignedUploadUrlResponse": {
+        "properties": {
+          "presigned_url": {
+            "type": "string",
+            "title": "Presigned Url"
+          },
+          "presigned_url_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Presigned Url Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "presigned_url",
+          "presigned_url_expires_at"
+        ],
+        "title": "PresignedUploadUrlResponse",
+        "description": "Response model for presigned upload URL"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "description": "Refresh token request payload"
+      },
+      "StepStatus": {
+        "type": "string",
+        "enum": [
+          "IN_PROGRESS",
+          "COMPLETED",
+          "FORCE_COMPLETED"
+        ],
+        "title": "StepStatus",
+        "description": "Step status enum"
+      },
+      "StickerTempRange": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "t_min": {
+            "type": "integer",
+            "title": "T Min"
+          },
+          "t_max": {
+            "type": "integer",
+            "title": "T Max"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "t_min",
+          "t_max"
+        ],
+        "title": "StickerTempRange",
+        "description": "Temperature range for a sticker type"
+      },
+      "StickerType": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Modified At"
+          },
+          "temp_ranges": {
+            "items": {
+              "$ref": "#/components/schemas/StickerTempRange"
+            },
+            "type": "array",
+            "title": "Temp Ranges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "server_modified_at"
+        ],
+        "title": "StickerType",
+        "description": "StickerType aggregate with temperature ranges"
+      },
+      "StickerTypeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StickerType"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "StickerTypeListResponse",
+        "description": "List of StickerType items"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenResponse",
+        "description": "Login response with tokens"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "app__models__defect__Defect": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "equipment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Equipment Id"
+          },
+          "unit_name": {
+            "type": "string",
+            "title": "Unit Name"
+          },
+          "defect_type_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Type Id"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Detected At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DefectStatus",
+            "default": "DETECTED"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "server_modified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Modified At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "equipment_id",
+          "unit_name",
+          "detected_at"
+        ],
+        "title": "Defect",
+        "description": "Defect aggregate root - read model"
+      },
+      "app__models__equipment__Defect": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "unit_name": {
+            "type": "string",
+            "title": "Unit Name"
+          },
+          "t_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Max"
+          },
+          "t_excess": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Excess"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Detected At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DefectStatus",
+            "default": "DETECTED"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "unit_name",
+          "detected_at"
+        ],
+        "title": "Defect",
+        "description": "Defect within equipment (child entity) - DEPRECATED: Use defect router instead\n\nKept for backwards compatibility. Fields are preserved but defects are now managed\nvia the separate defect router."
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your JWT token (standard Authorization header - may not work in Yandex Cloud)"
+      },
+      "X-Auth-Token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Auth-Token",
+        "description": "Enter 'Bearer \u003Ctoken\u003E' or just '\u003Ctoken\u003E' (works in Yandex Cloud where Authorization header is stripped)"
+      }
+    }
+  }
+}
