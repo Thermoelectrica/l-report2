@@ -15,7 +15,6 @@ class AuthState(rx.State):
     
     # Authentication status
     is_authenticated: bool = False
-    username: str = ""
     user_id: Optional[int] = None
     
     # Login form
@@ -24,9 +23,10 @@ class AuthState(rx.State):
     login_error: str = ""
     is_logging_in: bool = False
     
-    # Token storage (using rx.LocalStorage)
+    # Token and username storage (using rx.LocalStorage)
     access_token: str = rx.LocalStorage()
     refresh_token: str = rx.LocalStorage()
+    username: str = rx.LocalStorage()  # Store username from login form
     
     @rx.event
     async def on_load(self):
@@ -61,9 +61,8 @@ class AuthState(rx.State):
             if payload:
                 # Token is valid
                 self.is_authenticated = True
-                self.username = payload.get("sub", "")
                 self.user_id = payload.get("user_id")
-                logger.info(f"Token verified for user: {self.username}")
+                logger.info(f"Token verified for user: {self.username} (user_id: {self.user_id})")
             else:
                 # Token invalid or expired, try to refresh
                 logger.info("Token invalid or expired, attempting refresh")
@@ -110,20 +109,20 @@ class AuthState(rx.State):
                 if response.status_code == 200:
                     data = response.json()
                     
-                    # Store tokens in localStorage
+                    # Store tokens and username in localStorage
                     self.access_token = data["access_token"]
                     self.refresh_token = data["refresh_token"]
+                    self.username = username  # Store the username from login form
                     
                     # Verify the token and extract user info
                     payload = decode_jwt_token(self.access_token, config.jwt_public_key)
                     if payload:
                         self.is_authenticated = True
-                        self.username = payload.get("sub", username)
                         self.user_id = payload.get("user_id")
                     
                     self.is_logging_in = False
                     
-                    logger.info(f"Login successful for user: {self.username}")
+                    logger.info(f"Login successful for user: {self.username} (user_id: {self.user_id})")
                     
                     # Redirect to main page
                     return rx.redirect("/")
@@ -186,9 +185,8 @@ class AuthState(rx.State):
                     payload = decode_jwt_token(self.access_token, config.jwt_public_key)
                     if payload:
                         self.is_authenticated = True
-                        self.username = payload.get("sub", "")
                         self.user_id = payload.get("user_id")
-                        logger.info("Token refreshed successfully")
+                        logger.info(f"Token refreshed successfully for user: {self.username}")
                     else:
                         raise Exception("Invalid token received from refresh")
                 else:
