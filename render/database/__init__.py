@@ -7,7 +7,7 @@ from .models import Base
 
 # Create async engine for metadata database
 engine = create_async_engine(
-    settings.meta_db_url,
+    settings.get_meta_db_url_with_password(),
     echo=settings.app_env == "development",
     pool_pre_ping=True,
     pool_size=5,

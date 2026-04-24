@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,18 +25,62 @@ class Settings(BaseSettings):
     reports_path: str
 
     # Data Database
-    data_db_host: str
-    data_db_port: int = 5432
-    data_db_name: str
-    data_db_user: str
+    data_db_url: str
     data_db_password: str
 
     # Metadata Database
-    meta_db_host: str
-    meta_db_port: int = 5432
-    meta_db_name: str
-    meta_db_user: str
+    meta_db_url: str
     meta_db_password: str
+
+    # Parsed Data Database components (for backward compatibility)
+    @property
+    def data_db_host(self) -> str:
+        """Extract host from data database URL."""
+        parsed = urlparse(self.data_db_url)
+        return parsed.hostname or "localhost"
+
+    @property
+    def data_db_port(self) -> int:
+        """Extract port from data database URL."""
+        parsed = urlparse(self.data_db_url)
+        return parsed.port or 5432
+
+    @property
+    def data_db_name(self) -> str:
+        """Extract database name from data database URL."""
+        parsed = urlparse(self.data_db_url)
+        return parsed.path.lstrip("/") if parsed.path else ""
+
+    @property
+    def data_db_user(self) -> str:
+        """Extract username from data database URL."""
+        parsed = urlparse(self.data_db_url)
+        return parsed.username or ""
+
+    # Parsed Metadata Database components (for backward compatibility)
+    @property
+    def meta_db_host(self) -> str:
+        """Extract host from metadata database URL."""
+        parsed = urlparse(self.meta_db_url)
+        return parsed.hostname or "localhost"
+
+    @property
+    def meta_db_port(self) -> int:
+        """Extract port from metadata database URL."""
+        parsed = urlparse(self.meta_db_url)
+        return parsed.port or 5432
+
+    @property
+    def meta_db_name(self) -> str:
+        """Extract database name from metadata database URL."""
+        parsed = urlparse(self.meta_db_url)
+        return parsed.path.lstrip("/") if parsed.path else ""
+
+    @property
+    def meta_db_user(self) -> str:
+        """Extract username from metadata database URL."""
+        parsed = urlparse(self.meta_db_url)
+        return parsed.username or ""
 
     # Storage
     storage_backend: Literal["filesystem", "s3"] = "filesystem"
@@ -62,29 +107,35 @@ class Settings(BaseSettings):
     max_pdf_size_mb: int = 50
     cache_ttl_minutes: int = 5
 
-    @property
-    def data_db_url(self) -> str:
-        """Get async PostgreSQL connection URL for data database."""
-        return (
-            f"postgresql+asyncpg://{self.data_db_user}:{self.data_db_password}"
-            f"@{self.data_db_host}:{self.data_db_port}/{self.data_db_name}"
-        )
+    def get_data_db_url_with_password(self) -> str:
+        """Get async PostgreSQL connection URL for data database with password."""
+        parsed = urlparse(self.data_db_url)
+        # Reconstruct URL with password
+        netloc = f"{parsed.username}:{self.data_db_password}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return f"{parsed.scheme}://{netloc}{parsed.path}"
 
-    @property
-    def meta_db_url(self) -> str:
-        """Get async PostgreSQL connection URL for metadata database."""
-        return (
-            f"postgresql+asyncpg://{self.meta_db_user}:{self.meta_db_password}"
-            f"@{self.meta_db_host}:{self.meta_db_port}/{self.meta_db_name}"
-        )
+    def get_meta_db_url_with_password(self) -> str:
+        """Get async PostgreSQL connection URL for metadata database with password."""
+        parsed = urlparse(self.meta_db_url)
+        # Reconstruct URL with password
+        netloc = f"{parsed.username}:{self.meta_db_password}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return f"{parsed.scheme}://{netloc}{parsed.path}"
 
     @property
     def meta_db_url_sync(self) -> str:
         """Get sync PostgreSQL connection URL for Alembic migrations."""
-        return (
-            f"postgresql://{self.meta_db_user}:{self.meta_db_password}"
-            f"@{self.meta_db_host}:{self.meta_db_port}/{self.meta_db_name}"
-        )
+        parsed = urlparse(self.meta_db_url)
+        # Convert to sync driver and add password
+        netloc = f"{parsed.username}:{self.meta_db_password}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        # Replace asyncpg with psycopg2 for sync
+        scheme = parsed.scheme.replace("+asyncpg", "")
+        return f"{scheme}://{netloc}{parsed.path}"
 
 
 settings = Settings()
