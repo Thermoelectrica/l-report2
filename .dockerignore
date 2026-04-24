@@ -53,5 +53,8 @@ pytest.ini
 drafts/
 plans/
 
+# Sample reports
+sample_reports/
+
 # Logs
 *.log

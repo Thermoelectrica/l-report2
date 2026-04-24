@@ -43,6 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     fonts-liberation \
     fonts-dejavu-core \
+    unzip \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -54,6 +56,10 @@ WORKDIR /app
 # Copy Python packages from builder
 COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy entrypoint script
+COPY --chown=appuser:appuser entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Copy application code
 COPY --chown=appuser:appuser . .
@@ -71,13 +77,5 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/home/appuser/.local/bin:$PATH" \
     APP_ENV=production
 
-# Expose port for Reflex app
-EXPOSE 3000
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:3000', timeout=5)" || exit 1
-
 # Initialize database and run the application
-CMD ["reflex", "run", "--env", "prod", "--backend-only"]
+CMD ["/entrypoint.sh"]
