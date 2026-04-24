@@ -23,9 +23,12 @@ class AuthState(rx.State):
     login_error: str = ""
     is_logging_in: bool = False
     
-    # Token and username storage (using rx.LocalStorage)
-    access_token: str = rx.LocalStorage()
-    refresh_token: str = rx.LocalStorage()
+    # Token storage (using secure cookies for security - HTTP-only, inaccessible to JavaScript)
+    # This protects against XSS attacks
+    access_token: str = rx.Cookie(max_age=3600, secure=True)  # 1 hour expiration
+    refresh_token: str = rx.Cookie(max_age=604800, secure=True)  # 7 days expiration
+    
+    # Username can stay in LocalStorage as it's not sensitive
     username: str = rx.LocalStorage()  # Store username from login form
     
     @rx.event
