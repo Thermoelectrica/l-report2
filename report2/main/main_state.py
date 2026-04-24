@@ -34,11 +34,15 @@ class State(AuthState):
     _current_render_params: Dict[str, Any] = {}
 
     # Parameter dependency tracking
-    current_param_values: Dict[str, Any] = {}
+    # current_param_values: Dict[str, Any] = {}
     param_dependencies: Dict[str, List[str]] = {}
 
     # Preview navigation state
     _preview_mode: bool = False
+
+    @rx.var
+    def current_param_values(self) -> Dict[str, Any]:
+        return {i.name: i.value for i in self.report_parameters}
 
     @rx.event
     async def load_reports(self):
@@ -75,15 +79,15 @@ class State(AuthState):
                     required=p.required,
                     description=p.description or p.name,
                     enum_values=p.enum or [],
-                    default_value=str(p.default) if p.default is not None else "",
+                    value=str(p.default) if p.default is not None else "",  # Initialize value with default
                 )
                 for p in metadata.parameters
             ]
 
             # Initialize current parameter values with defaults
-            self.current_param_values = {
-                p.name: p.default for p in metadata.parameters
-            }
+            # self.current_param_values = {
+            #     p.name: p.default for p in metadata.parameters
+            # }
 
             # Load parameter dependency graph from service
             self.param_dependencies = await render_service.getParameterDependencies(report_id)
@@ -108,8 +112,14 @@ class State(AuthState):
             # Ensure services are initialized
             await ensure_services_initialized()
 
-            # Update current parameter values
-            self.current_param_values[parameter_name] = value
+            # Update the value in ParamInfo
+            for param_info in self.report_parameters:
+                if param_info.name == parameter_name:
+                    param_info.value = str(value)
+                    break
+
+            # Update current parameter values (still needed for enum queries)
+            # self.current_param_values[parameter_name] = value
 
             # Check if any parameters depend on this one
             dependent_params = self.param_dependencies.get(parameter_name, [])

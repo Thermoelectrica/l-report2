@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 
 import reflex as rx
 
@@ -64,7 +64,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             ParameterType.DATE.value,
             rx.input(
                 name=param.name,
-                default_value=param.default_value,
+                value=param.value,
                 placeholder=f"Enter {param.name}",
                 type="date",
                 required=param.required,
@@ -75,7 +75,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             ParameterType.DATETIME.value,
             rx.input(
                 name=param.name,
-                default_value=param.default_value,
+                value=param.value,
                 placeholder=f"Enter {param.name}",
                 type="datetime-local",
                 required=param.required,
@@ -87,7 +87,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             rx.hstack(
                 rx.input(
                     name=param.name,
-                    default_value=param.default_value,
+                    value=param.value,
                     placeholder=f"Enter {param.name}",
                     type="number",
                     step="1",
@@ -107,7 +107,7 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             ParameterType.FLOAT.value,
             rx.input(
                 name=param.name,
-                default_value=param.default_value,
+                value=param.value,
                 placeholder=f"Enter {param.name}",
                 type="number",
                 step="any",
@@ -119,7 +119,8 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             ParameterType.BOOLEAN.value,
             rx.switch(
                 name=param.name,
-                default_checked=rx.cond(param.default_value == "True", True, False),
+                checked=rx.cond(param.value == "True", True, False),
+                on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
         ),
         rx.cond(
@@ -128,14 +129,14 @@ def parameter_input(param: ParamInfo) -> rx.Component:
             rx.select(
                 param.enum_values,
                 name=param.name,
-                default_value=param.default_value,
+                value=param.value,
                 placeholder=f"Select {param.name}",
                 on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
             # Plain text box
             rx.input(
                 name=param.name,
-                default_value=param.default_value,
+                value=param.value,
                 placeholder=f"Enter {param.name}",
                 type="text",
                 width="48%",
@@ -315,7 +316,7 @@ def index() -> rx.Component:
                 # Left column - Report list
                 rx.box(
                     rx.vstack(
-                        rx.heading("Available Reports", size="5"),
+                        rx.heading("Отчеты", size="5"),
                         rx.divider(),
                         rx.cond(
                             State.reports,

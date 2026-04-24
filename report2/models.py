@@ -12,4 +12,4 @@ class ParamInfo(BaseModel):
     required: bool
     description: str
     enum_values: List[str] = []
-    default_value: str = ""
+    value: str = ""  # Current value (initialized with default, then tracks user input)
