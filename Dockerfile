@@ -50,6 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create non-root user
 RUN useradd -m -u 1000 appuser
 
+# Create reports directory that will be mounted at runtime
+RUN mkdir -p /reports && chown appuser:appuser /reports
+
 # Set working directory
 WORKDIR /app
 
@@ -75,7 +78,21 @@ USER appuser
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/home/appuser/.local/bin:$PATH" \
-    APP_ENV=production
+    APP_ENV=production \
+    REPORTS_PATH=/reports
+
+# Create temporary dummy .env for build-time compilation only
+# These values satisfy Pydantic validation during 'reflex compile'
+RUN echo 'DATA_DB_URL=postgresql+asyncpg://dummy@localhost:5432/dummy\n\
+    DATA_DB_PASSWORD=dummy\n\
+    META_DB_URL=postgresql+asyncpg://dummy@localhost:5432/dummy\n\
+    META_DB_PASSWORD=dummy' > .env
+
+# Compile frontend app
+RUN reflex compile
+
+# Remove dummy .env file so it doesn't interfere with runtime configuration
+RUN rm -f .env
 
 # Initialize database and run the application
 CMD ["/entrypoint.sh"]

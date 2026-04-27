@@ -1,5 +1,5 @@
 # Web Framework
-reflex==0.8.27
+reflex==0.9.0
 
 # Core
 pydantic>=2.0.0
