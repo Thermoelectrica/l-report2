@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Production stage
 FROM python:3.14-slim
 
-# Install runtime dependencies for WeasyPrint
+# Install runtime dependencies for WeasyPrint and git for cloning reports
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     unzip \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
