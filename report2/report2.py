@@ -10,6 +10,7 @@ from render.config import settings
 from report2.main_page import index
 from report2.preview.preview_page import preview_page
 from report2.auth.login_page import login_page
+from report2.status.status_page import status_page
 
 logger = logging.getLogger(__name__)
 
@@ -31,3 +32,4 @@ app = rx.App()
 app.add_page(login_page, route="/login")
 app.add_page(index)
 app.add_page(preview_page, route="/preview")
+app.add_page(status_page, route="/status")

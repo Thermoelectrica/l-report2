@@ -290,6 +290,16 @@ def index() -> rx.Component:
                 ),
                 rx.spacer(),
                 rx.hstack(
+                    rx.link(
+                        rx.icon_button(
+                            rx.icon("activity"),
+                            size="2",
+                            variant="soft",
+                            color_scheme="gray",
+                        ),
+                        href="/status",
+                        title="Status Page",
+                    ),
                     rx.cond(
                         State.username != "",
                         rx.text(
