@@ -48,6 +48,10 @@ class ReportRepository:
         for report_dir in self.reports_path.iterdir():
             if not report_dir.is_dir():
                 continue
+            
+            # Skip dotfiles/dotfolders (e.g., .git)
+            if report_dir.name.startswith('.'):
+                continue
 
             try:
                 report = self._load_report(report_dir)
