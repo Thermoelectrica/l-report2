@@ -90,6 +90,22 @@ mkdir -p "$INSTALL_DIR/.web"
 mkdir -p "$INSTALL_DIR/logs"
 echo -e "${GREEN}✓ Directories created${NC}"
 
+# Create www-data home directory for Reflex
+echo -e "${YELLOW}Setting up www-data home directory for Reflex...${NC}"
+WWW_HOME="/var/www"
+mkdir -p "$WWW_HOME/.local/share"
+mkdir -p "$WWW_HOME/.cache"
+mkdir -p "$WWW_HOME/.config"
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$WWW_HOME/.local" "$WWW_HOME/.cache" "$WWW_HOME/.config"
+echo -e "${GREEN}✓ www-data home directory structure created${NC}"
+
+# Set HOME environment variable for www-data user
+if ! grep -q "^$SERVICE_USER:" /etc/passwd; then
+    echo -e "${YELLOW}Setting HOME directory for $SERVICE_USER...${NC}"
+    usermod -d "$WWW_HOME" "$SERVICE_USER" || true
+    echo -e "${GREEN}✓ HOME directory set${NC}"
+fi
+
 # Create virtual environment
 echo -e "${YELLOW}Creating Python virtual environment...${NC}"
 python3 -m venv "$VENV_DIR"
@@ -141,10 +157,11 @@ echo -e "${GREEN}✓ Database migrations completed${NC}"
 # Initialize Reflex
 echo -e "${YELLOW}Initializing Reflex...${NC}"
 cd "$INSTALL_DIR"
-sudo -u "$SERVICE_USER" "$VENV_DIR/bin/reflex" init || {
+sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/reflex" init || {
     echo -e "${YELLOW}⚠ Reflex initialization warning (this is normal for first-time setup)${NC}"
+    echo -e "${YELLOW}  Reflex will initialize on first run${NC}"
 }
-echo -e "${GREEN}✓ Reflex initialized${NC}"
+echo -e "${GREEN}✓ Reflex initialization attempt complete${NC}"
 
 echo ""
 echo -e "${GREEN}=== Installation Complete ===${NC}"
@@ -156,4 +173,12 @@ echo "3. Start service: systemctl start $APP_NAME"
 echo "4. Check status: systemctl status $APP_NAME"
 echo "5. View logs: journalctl -u $APP_NAME -f"
 echo ""
+echo -e "${YELLOW}Service management commands:${NC}"
+echo "  Start:   systemctl start $APP_NAME"
+echo "  Stop:    systemctl stop $APP_NAME"
+echo "  Restart: systemctl restart $APP_NAME"
+echo "  Status:  systemctl status $APP_NAME"
+echo "  Logs:    journalctl -u $APP_NAME -f"
+echo ""
 echo -e "${GREEN}Installation directory: $INSTALL_DIR${NC}"
+echo -e "${GREEN}Service user home: $WWW_HOME${NC}"
