@@ -88,6 +88,7 @@ echo -e "${YELLOW}Creating application directories...${NC}"
 mkdir -p "$INSTALL_DIR/uploaded_files"
 mkdir -p "$INSTALL_DIR/.web"
 mkdir -p "$INSTALL_DIR/logs"
+mkdir -p "$INSTALL_DIR/.states"
 echo -e "${GREEN}✓ Directories created${NC}"
 
 # Create www-data home directory for Reflex
@@ -124,6 +125,7 @@ echo -e "${GREEN}✓ Dependencies installed${NC}"
 # Set ownership
 echo -e "${YELLOW}Setting file ownership...${NC}"
 chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$WWW_HOME/.local" "$WWW_HOME/.cache" "$WWW_HOME/.config"
 echo -e "${GREEN}✓ Ownership set to $SERVICE_USER:$SERVICE_GROUP${NC}"
 
 # Set permissions
@@ -133,6 +135,8 @@ chmod 750 "$INSTALL_DIR/.env"
 chmod -R 755 "$INSTALL_DIR/uploaded_files"
 chmod -R 755 "$INSTALL_DIR/.web"
 chmod -R 755 "$INSTALL_DIR/logs"
+chmod -R 755 "$INSTALL_DIR/.web"
+chmod -R 755 "$INSTALL_DIR/.states"
 echo -e "${GREEN}✓ Permissions set${NC}"
 
 # Install systemd service
