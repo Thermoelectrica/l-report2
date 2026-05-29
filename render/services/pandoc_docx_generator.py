@@ -5,12 +5,29 @@ import subprocess
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from html2docx import html2docx # development
+import mammoth # development
+from html.parser import HTMLParser
+from docx import Document # development
+import pandoc # development
+from .docx_generator import DocxGenerator # development
+
 from .output_generator import OutputGenerator
 
 logger = logging.getLogger(__name__)
 
 # Fixed filename for the reference DOCX file
 REFERENCE_DOCX_FILENAME = "reference.docx"
+
+
+class MyHTMLParser(HTMLParser): # development
+
+    def __init__(self, doc):
+        super().__init__()
+        self.doc = doc
+
+    def handle_data(self, data):
+        self.doc.add_paragraph(data)
 
 
 class PandocDocxGenerator(OutputGenerator):
@@ -43,9 +60,11 @@ class PandocDocxGenerator(OutputGenerator):
         """
         try:
             logger.info(f"Generating DOCX from HTML (source: {source_path})")
+            print(f"Generating DOCX from HTML (source: {source_path})") # development
 
             # Check for reference DOCX file in source_path
             reference_docx_path = source_path / REFERENCE_DOCX_FILENAME
+            print(f"REFERENCE_DOCX_FILENAME: {reference_docx_path}") # development
             reference_docx_exists = reference_docx_path.exists()
 
             if reference_docx_exists:
@@ -61,10 +80,34 @@ class PandocDocxGenerator(OutputGenerator):
             with NamedTemporaryFile(mode='rb', suffix='.docx', delete=False) as output_file:
                 output_file_path = output_file.name
 
+            print(f"INPUT FILE PATH: {input_file_path}") # development
+            '''
+            with open(input_file_path) as fp:
+                html = fp.read()
+            
+            # html2docx() returns an io.BytesIO() object. The HTML must be valid.
+            buf = html2docx(html, title="My Document")
+
+            with open("my.docx", "wb") as fp:
+                fp.write(buf.getvalue())
+            
+            with open("output2.docx", "wb") as docx_file:
+                result = mammoth.convert_to_docx(html)
+                docx_file.write(result.value)
+            
+         
+            document = Document()
+            parser = MyHTMLParser(document)
+            parser.feed(html)
+            document.save('output.docx')
+            '''
+            document = DocxGenerator()
+            await document.generate_docx()  # development
+
             try:
                 # Build pandoc command
                 cmd = [
-                    'pandoc',
+                    'pandoc1',
                     input_file_path,
                     '-f', 'html',
                     '-t', 'docx',
