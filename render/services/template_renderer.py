@@ -11,6 +11,8 @@ from .local_image_service import local_image_service
 from .repository import Report
 from .s3_image_service import s3_image_service
 
+from .docx_renderer import DocxRenderer # development
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,6 +64,10 @@ class TemplateRenderer:
             Rendered HTML string
         """
         try:
+            print(f"CALL DOCX RENDERER...")
+            doc = DocxRenderer() # development
+            doc.render(report, parameters, query_results) # development
+
             env = self._create_environment(report)
             template = env.get_template("index.html.j2")
 
