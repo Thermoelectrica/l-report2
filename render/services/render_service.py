@@ -411,11 +411,24 @@ class RenderServiceImpl(RenderServiceInterface):
                 source_content = template_renderer.render(report, params, query_results)
                 logger.info("Template rendered successfully")
 
+                # Выбираем набор параметров в зависимости от типа отчета 
+                # (weasyprint/docx)
+                kwargs = {
+                    "source_content": source_content,
+                    "source_path": report.path,
+                    "base_url": None
+                 } if output_format == "weasyprint" else {
+                    "report": report, 
+                    "params": params, 
+                    "query_results": query_results
+                  } # development
+
                 # Generate output using selected generator
-                output_bytes = await generator.generate(
-                    source_content=source_content,
-                    source_path=report.path,
-                    base_url=None
+                output_bytes = await generator.generate( # development
+                    **kwargs,
+                    #source_content=source_content,
+                    #source_path=report.path,
+                    #base_url=None
                 )
                 file_extension = generator.file_extension
                 
