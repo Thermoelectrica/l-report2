@@ -63,7 +63,5 @@ generator_registry = GeneratorRegistry()
 
 # Register default generators
 from .weasyprint_generator import weasyprint_generator
-from .pandoc_docx_generator import pandoc_docx_generator
 
 generator_registry.register(weasyprint_generator)
-generator_registry.register(pandoc_docx_generator)
