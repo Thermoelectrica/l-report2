@@ -3,23 +3,23 @@
 import logging
 from typing import Dict
 
-from .output_generator import OutputGenerator
+from .report_renderer import ReportRenderer
 
 logger = logging.getLogger(__name__)
 
 
-class GeneratorRegistry:
+class ReportRegistry:
     """Registry for output format generators."""
 
     def __init__(self):
-        self._generators: Dict[str, OutputGenerator] = {}
+        self._generators: Dict[str, ReportRenderer] = {}
 
-    def register(self, generator: OutputGenerator) -> None:
+    def register(self, generator: ReportRenderer) -> None:
         """
         Register a generator.
 
         Args:
-            generator: OutputGenerator instance to register
+            generator: ReportRenderer instance to register
         """
         format_name = generator.format_name
         if format_name in self._generators:
@@ -28,7 +28,7 @@ class GeneratorRegistry:
         self._generators[format_name] = generator
         logger.info(f"Registered generator for format: {format_name}")
 
-    def get_generator(self, format_name: str) -> OutputGenerator:
+    def get_generator(self, format_name: str) -> ReportRenderer:
         """
         Get generator for specified format.
 
@@ -36,7 +36,7 @@ class GeneratorRegistry:
             format_name: Format identifier (e.g., "weasyprint", "docx")
 
         Returns:
-            OutputGenerator instance
+            ReportRenderer instance
 
         Raises:
             ValueError: If format is not registered
@@ -59,11 +59,9 @@ class GeneratorRegistry:
 
 
 # Global registry instance
-generator_registry = GeneratorRegistry()
+renderer_registry = ReportRegistry()
 
 # Register default generators
-from .weasyprint_generator import weasyprint_generator
-from .pandoc_docx_generator import pandoc_docx_generator
+from .weasyprint_renderer import weasyprint_renderer
 
-generator_registry.register(weasyprint_generator)
-generator_registry.register(pandoc_docx_generator)
+renderer_registry.register(weasyprint_renderer)

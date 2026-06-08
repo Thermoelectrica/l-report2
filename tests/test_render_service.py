@@ -217,7 +217,7 @@ class TestRenderServiceImpl:
 
         with patch("render.services.render_service.AsyncSessionLocal") as mock_session, \
              patch("render.services.render_service.repository") as mock_repo, \
-             patch("render.services.render_service.generator_registry") as mock_registry:
+             patch("render.services.render_service.renderer_registry") as mock_registry:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
             mock_registry.get_generator.return_value = mock_generator
@@ -281,7 +281,7 @@ class TestRenderServiceIntegration:
         ) as mock_qe, patch(
             "render.services.render_service.template_renderer"
         ) as mock_tr, patch(
-            "render.services.render_service.generator_registry"
+            "render.services.render_service.renderer_registry"
         ) as mock_registry, patch(
             "render.services.render_service.AsyncSessionLocal"
         ) as mock_session:

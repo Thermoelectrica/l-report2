@@ -4,6 +4,7 @@ import locale
 import logging
 from datetime import datetime
 from typing import Any, Dict, List
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -17,8 +18,16 @@ logger = logging.getLogger(__name__)
 class TemplateRenderer:
     """Render Jinja2 templates with query results and parameters."""
 
+    def __init__ (self):
+        self.file_template = "index.html.j2"
+
     def _create_environment(self, report: Report) -> Environment:
         """Create Jinja2 environment for specific report."""
+
+        template_file = Path(f"{report.path}/{self.file_template}")
+        if not template_file.exists():
+            raise ValueError(f"Missing {self.file_template} in {report.path}")
+        
         env = Environment(
             loader=FileSystemLoader(str(report.path)),
             autoescape=True,
@@ -63,7 +72,7 @@ class TemplateRenderer:
         """
         try:
             env = self._create_environment(report)
-            template = env.get_template("index.html.j2")
+            template = env.get_template(self.file_template)
 
             # Build context
             context = {
