@@ -63,5 +63,7 @@ renderer_registry = ReportRegistry()
 
 # Register default generators
 from .weasyprint_renderer import weasyprint_renderer
+from .docxtpl_renderer import docxtpl_renderer
 
 renderer_registry.register(weasyprint_renderer)
+renderer_registry.register(docxtpl_renderer)

@@ -1,1 +1,0 @@
-SELECT name FROM lesiv.plant WHERE not(is_deleted)
