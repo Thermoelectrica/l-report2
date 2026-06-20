@@ -196,11 +196,39 @@ class QueryExecutor:
 
         return value
 
+    def _get_pg_type_cast(self, param_def: Any) -> str:
+        """
+        Return a PostgreSQL type cast string for a parameter definition.
+
+        Args:
+            param_def: Parameter definition from metadata (may be None)
+
+        Returns:
+            PostgreSQL cast suffix, e.g. '::text', '::integer', or '::text' as fallback
+        """
+        if param_def is None:
+            return "::text"
+        type_cast_map = {
+            ParameterType.STRING: "::text",
+            ParameterType.INTEGER: "::integer",
+            ParameterType.FLOAT: "::double precision",
+            ParameterType.BOOLEAN: "::boolean",
+            ParameterType.DATE: "::date",
+            ParameterType.DATETIME: "::timestamp",
+        }
+        return type_cast_map.get(param_def.type, "::text")
+
     def _convert_named_to_positional(
         self, query: str, parameters: Dict[str, Any], metadata: Any
     ) -> Tuple[str, List[Any]]:
         """
         Convert named parameters (:param_name) to positional ($1, $2, etc.).
+
+        When the same named parameter appears multiple times in the query, all
+        occurrences are replaced with the same positional placeholder.  A type
+        cast (e.g. ``::text``) is appended to every positional placeholder so
+        that PostgreSQL can always infer the parameter type even in ambiguous
+        contexts such as ``$1 IS NULL``.
 
         Args:
             query: SQL query with named parameters (e.g., :schema_name, :table_name)
@@ -219,7 +247,7 @@ class QueryExecutor:
             return query, []
 
         # Build parameter mapping and values list
-        param_mapping = {}  # Maps parameter name to position number
+        param_mapping = {}  # Maps parameter name -> (position, param_def)
         positional_params = []
 
         # Process parameters in the order they appear in the query
@@ -250,16 +278,25 @@ class QueryExecutor:
 
             # Add to positional params and mapping
             position = len(positional_params) + 1
-            param_mapping[param_name] = position
+            param_mapping[param_name] = (position, param_def)
             positional_params.append(value)
 
-        # Replace named parameters with positional ones
+        # Replace named parameters with positional ones.
+        # Append a type cast to every placeholder so PostgreSQL can always
+        # determine the parameter type (fixes AmbiguousParameterError when the
+        # same parameter is used in e.g. ":x = :x OR :x IS NULL").
+        # If the SQL already contains an explicit cast after the named param
+        # (e.g. ":val::text"), consume that cast in the regex so we don't
+        # produce a double cast like "$1::text::text".
         converted_query = query
-        for param_name, position in param_mapping.items():
-            # Use word boundaries and negative lookbehind to avoid partial replacements
-            # and PostgreSQL type casts (::type)
+        for param_name, (position, param_def) in param_mapping.items():
+            type_cast = self._get_pg_type_cast(param_def)
+            # The optional group (?:::\w[\w\s,()]*(?<!\s))? consumes an
+            # existing ::cast that immediately follows the named parameter.
             converted_query = re.sub(
-                rf"(?<!:):{param_name}\b", f"${position}", converted_query
+                rf"(?<!:):{param_name}\b(?:::\w+(?:\([\w\s,]+\))?)?",
+                f"${position}{type_cast}",
+                converted_query,
             )
 
         return converted_query, positional_params

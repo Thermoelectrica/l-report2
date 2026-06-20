@@ -3,7 +3,6 @@
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 import pytest
 
 from render.models import ParameterType, ReportMetadata, ReportParameter
