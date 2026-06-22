@@ -300,7 +300,7 @@ class TestRenderServiceIntegration:
             
             # Mock generator
             mock_generator = MagicMock()
-            mock_generator.generate = AsyncMock(return_value=b"%PDF-test")
+            mock_generator.render = AsyncMock(return_value=b"%PDF-test")
             mock_generator.file_extension = "pdf"
             mock_registry.get_generator.return_value = mock_generator
             

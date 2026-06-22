@@ -28,15 +28,6 @@ class WeasyPrintRenderer(ReportRenderer):
     def file_extension(self) -> str:
         return "pdf"
 
-    async def render(
-        self,
-        report: Report,
-        parameters: Dict[str, Any],
-        query_results: Dict[str, List[Dict[str, Any]]],
-    ) -> bytes:
-        """Отрендерить отчёт и вернуть байты результата."""
-        return self.template_renderer.render(report, parameters, query_results)
-
     async def render_preview(
         self,
         report: Report,
@@ -44,13 +35,13 @@ class WeasyPrintRenderer(ReportRenderer):
         query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str | None:
         """Отрендерить HTML-превью. Возвращает None, если формат не поддерживает превью."""
-        return await self.render(report, parameters, query_results)
+        return self.template_renderer.render(report, parameters, query_results)
 
     @property
     def supports_preview(self) -> bool:
         pass
 
-    async def generate(
+    async def render(
         self,
         report: Report,
         parameters: Dict[str, Any],
@@ -67,7 +58,7 @@ class WeasyPrintRenderer(ReportRenderer):
         Returns:
             PDF file content as bytes
         """
-        source_content = await self.render(report, parameters, query_results)
+        source_content = await self.render_preview(report, parameters, query_results)
 
         try:
             logger.info(f"Generating PDF from HTML (source: {report.path})")

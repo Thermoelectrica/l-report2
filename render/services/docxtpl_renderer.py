@@ -5,11 +5,11 @@ from datetime import datetime
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 import locale
 
 from PIL import Image
-from docx.shared import Mm
+from docx.shared import Mm, Pt
 from docxtpl import DocxTemplate, InlineImage
 import httpx
 
@@ -31,9 +31,10 @@ class DocxTplRenderer(ReportRenderer):
     def __init__(self, template_renderer: TemplateRenderer = template_renderer):
         self.template_renderer = template_renderer
         self.logoname = "thermoelectrica_logo.png"
-        self.file_docx = "source_template.docx"
+        self.file_docx = "album_template.docx"
         self.output_path = Path("./generated_template.docx")
         self.data_images = Path("./data_images")
+        self.blank_image = "blank_image"
         
     @property
     def format_name(self) -> str:
@@ -43,19 +44,19 @@ class DocxTplRenderer(ReportRenderer):
     def file_extension(self) -> str:
         return "docx"
     
+    def create_blank_image(self, folder) -> Image:
+        """Создать два пустых изображения в новой папке """
+        # размер картинок в пикселях и код белого цвета
+        for idx, size in enumerate([(506, 680), (506, 380)]):
+            image = Image.new("RGB", size, (255, 255, 255))
+            image.save(f"{folder}/{self.blank_image}_{idx}.jpg")
+            logger.info(f"Created blank image: {folder}/{self.blank_image}_{idx}.jpg")
+    
     def create_folder(self, folder: Path) -> None:
         """Создать папку для фотографий """
         folder.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created/verified directory for images: {folder.resolve()}")
-
-    async def render(
-        self,
-        report: Report,
-        parameters: Dict[str, Any],
-        query_results: Dict[str, List[Dict[str, Any]]],
-    ) -> bytes:
-        """Отрендерить отчёт и вернуть байты результата."""
-        return self.template_renderer.render(report, parameters, query_results)
+        self.create_blank_image(folder.resolve())
 
     async def render_preview(
         self,
@@ -64,17 +65,17 @@ class DocxTplRenderer(ReportRenderer):
         query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str | None:
         """Отрендерить HTML-превью. Возвращает None, если формат не поддерживает превью."""
-        return await self.render(report, parameters, query_results)
+        return self.template_renderer.render(report, parameters, query_results)
 
     @property
     def supports_preview(self) -> bool:
         return False
     
-    async def fetch_async_data(self, client, item):
+    async def fetch_async_data(self, client, item) -> str | Literal[0, 1]:
         file_name = str(Path(self.data_images) / item['name'])
         # Если файл уже есть — пропускаем загрузку
         if os.path.isfile(file_name):
-            return 0
+            return False
 
         try:
             async with client.stream(
@@ -93,24 +94,42 @@ class DocxTplRenderer(ReportRenderer):
                 # Изменяем размер изображения
                 with Image.open(file_name) as img:
                     width, height = img.size
-                    new_width = 300
-                    new_height = int(height * (new_width / width))
-                    resized_img = img.resize((new_width, new_height), Image.BICUBIC)
-                    resized_img.save(file_name)
 
-                return 1
-
+                    # условие для камер пирометров 
+                    # модели FLIR E6xt Wifi (320 x 240) и FLIR E95 (640 x 480)
+                    if height in [240, 480]:
+                        new_width = 506 # это пиксели для 67мм (72x72 dpi)
+                        new_height = int(height * (new_width / width))
+                        img = img.resize((new_width, new_height), Image.BICUBIC)
+                        img.save(file_name)
+                        return True
+                    
+                    if width > height: # поворот на 90 градусов
+                        img = img.rotate(-90, expand=True)
+                        width, height = img.size
+                    new_height = 680 # это пиксели для 90мм (72x72 dpi)
+                    new_width = int(width * (new_height / height))
+                    img = img.resize((new_width, new_height), Image.BICUBIC)
+                    img.save(file_name)
+                return True
+                
         except httpx.TimeoutException:
             logger.error(f"Timeout downloading {item['url']}")
+            # Удаляем недокачанный файл, чтобы не кэшировался
+            if os.path.exists(file_name):
+                os.remove(file_name)
             return f"Error: Timeout for {item['name']}"
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error {e.response.status_code} for {item['url']}")
             return f"Error: HTTP {e.response.status_code} for {item['name']}"
         except Exception as exc:
             logger.exception(f"Failed to download {item['url']}")
+            # Удаляем битый файл, чтобы не кэшировался
+            if os.path.exists(file_name):
+                os.remove(file_name)
             return f"Error: {type(exc).__name__}: {exc}"
 
-    async def fetch_images(self, query_results: Dict[str, List[Dict[str, Any]]]):
+    async def fetch_images(self, query_results: Dict[str, List[Dict[str, Any]]]) -> None:
         urls_collection = []
         for row in query_results["data"]:
             image_keys = [ key for key in row.keys() if "image_id" in key ]
@@ -127,9 +146,9 @@ class DocxTplRenderer(ReportRenderer):
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Подсчёт статистики
-            downloaded = sum(1 for r in results if r == 1)
-            cached = sum(1 for r in results if r == 0)
-            errors = [r for r in results if isinstance(r, Exception) or (isinstance(r, str) and r.startswith("Error"))]
+            downloaded = sum(1 for r in results if r is True)
+            cached = sum(1 for r in results if r is False)
+            errors = [r for r in results if isinstance(r, BaseException)]
 
             logger.info(
                 f"Images downloaded: {downloaded}, from cache: {cached}, errors: {len(errors)}"
@@ -138,7 +157,6 @@ class DocxTplRenderer(ReportRenderer):
             if errors:
                 error_msg = "Failed to download images:\n" + "\n".join(str(e) for e in errors)
                 logger.error(error_msg)
-                raise RuntimeError(error_msg)
         
     def render_docx(self, report: Report, params: Dict[str, Any]) -> bytes:
         # Проверяем наличие файла DOCX
@@ -149,14 +167,6 @@ class DocxTplRenderer(ReportRenderer):
         try:
             doc = DocxTemplate(docx_file)
             logo_image = InlineImage(doc, image_descriptor=f"{report.path}/{self.logoname}", width=Mm(40))
-            plant_name = params['plant_name']
-            protocol_number = params['protocol_number']
-            day_start = params["period_start"].strftime("%d")
-            month_start = params["period_start"].strftime("%B")
-            year_start = params["period_start"].strftime("%Y")
-            day_end = params["period_end"].strftime("%d")
-            month_end = params["period_end"].strftime("%B")
-            year_end = params["period_end"].strftime("%Y")
 
             inspection_summary = {}
             for item in self.query_results["inspection_summary"]:
@@ -165,8 +175,7 @@ class DocxTplRenderer(ReportRenderer):
                 else:
                     inspection_summary[item["facility_name"]] = [item]
 
-            defects = []
-            for idx, row in enumerate(self.query_results["data"]):
+            for row in self.query_results["data"]:
                 group_label = ""
                 if row["criticality"] == "CRITICAL" and row["is_panel"] == "MOTOR":
                     group_label = "Критические дефекты двигателей"
@@ -183,63 +192,36 @@ class DocxTplRenderer(ReportRenderer):
 
                 pictures = []
                 image_keys = [ key for key in row.keys() if "image_id" in key ]
-                for image in image_keys:
-                    picture = "Фотография отсутствует"
-                    if row.get(image):
-                        picture = InlineImage(
-                            doc, 
-                            image_descriptor=f"{self.data_images}/{row.get(image)}", 
-                            width=Mm(53),
-                        )
+                for idx, image in enumerate(image_keys):
+                    if row.get(image) and os.path.isfile(str(Path(self.data_images) / row.get(image))):
+                        image_descriptor=f"{self.data_images}/{row.get(image)}"
+                    else:
+                        image_descriptor=f"{self.data_images}/{self.blank_image}_{idx}.jpg"
+                    picture = InlineImage(
+                        doc, 
+                        image_descriptor=image_descriptor, 
+                        width=Mm(67),
+                    )
                     pictures.append(picture)
 
-                defects.append(
-                    {
-                        "idx": idx + 1,
-                        "full_equipment_name": row["full_equipment_name"].replace(">", "\n"),
-                        "defect_type_name": row["defect_type_name"],
-                        "unit_name": row["unit_name"],
-                        "pictures": pictures,
-                        "is_sticker_present": row["is_sticker_present"],
-                        "sticker_name": row["sticker_name"],
-                        "t_sticker": row["t_sticker"],
-                        "t_max": row["t_max"],
-                        "is_test_ready": row["is_test_ready"],
-                        "t_observed": row["t_observed"],
-                        "t_environment": row["t_environment"],
-                        "t_similar_unit": row["t_similar_unit"],
-                        "nominal_current": row["nominal_current"],
-                        "measured_current": row["measured_current"],
-                        "t_excess": row["t_excess"],
-                        "load_factor_range": row["load_factor_range"],  
-                        "t_observed_excess_50": row["t_observed_excess_50"],
-                        "t_observed_excess_100": row["t_observed_excess_100"],
-                        "t_over_max_excess": row["t_over_max_excess"],
-                        "criticality": row["criticality"],
-                    }
-                )
+                row["full_equipment_name"] = row["full_equipment_name"].replace(">", "\n")
+                row["defect_type_name"] = f"{row['defect_type_name']} *"
+                row["group_label"] = group_label
+                row["pictures"] = pictures
+                row["sticker_name"] = row["sticker_name"].replace("°С", " °С")
 
             context = {
                 "params": params,
                 "logo_image": logo_image,
-                "plant_name": plant_name,
-                "protocol_number": protocol_number,
-                "group_label": group_label,
-                "day_end": day_end, 
-                "month_end": month_end, 
-                "year_end": year_end,
-                "day_start": day_start, 
-                "month_start": month_start, 
-                "year_start": year_start,
-                "data_query": self.query_results["data"],
+                "queries": self.query_results,
                 "inspection_summary": inspection_summary,
-                "defects": defects,
                 "globals": {
                         "template_name": report.id,
                         "report_name": report.metadata.name,
                         "generated_at": datetime.utcnow().isoformat(),
                         "version": report.metadata.version,
-                    },
+                },
+                "page_break": "\f",
             }
             doc.render(context)
             doc.save(self.output_path)
@@ -252,7 +234,7 @@ class DocxTplRenderer(ReportRenderer):
             self.output_path.unlink(missing_ok=True)
         return docx_bytes
 
-    async def generate(
+    async def render(
         self,
         report: Report,
         parameters: Dict[str, Any],
@@ -269,7 +251,6 @@ class DocxTplRenderer(ReportRenderer):
         Returns:
             DOCX file content
         """
-        #source_content = await self.render(report, parameters, query_results)
         self.query_results = query_results
 
         try:

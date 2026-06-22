@@ -420,7 +420,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 logger.info(f"Executed {len(query_results)} queries")
 
                 # Render template
-                output_bytes = await generator.generate(report, params, query_results)
+                output_bytes = await generator.render(report, params, query_results)
                 logger.info("Template rendered successfully")
 
                 file_extension = generator.file_extension
