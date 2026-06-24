@@ -413,8 +413,6 @@ class RenderServiceImpl(RenderServiceInterface):
                 # Get appropriate generator
                 generator = renderer_registry.get_generator(output_format)
 
-                #generator = await self.get_generator(report_id)
-
                 # Execute queries
                 query_results = await query_executor.execute_queries(report, params)
                 logger.info(f"Executed {len(query_results)} queries")

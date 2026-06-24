@@ -1,7 +1,9 @@
 """DOCX_TPL generator for DOCX output."""
 
 import asyncio
+import shutil
 from datetime import datetime
+import io
 import logging
 import os
 from pathlib import Path
@@ -9,7 +11,7 @@ from typing import Any, Dict, List, Literal
 import locale
 
 from PIL import Image
-from docx.shared import Mm, Pt
+from docx.shared import Mm
 from docxtpl import DocxTemplate, InlineImage
 import httpx
 
@@ -33,9 +35,16 @@ class DocxTplRenderer(ReportRenderer):
         self.logoname = "thermoelectrica_logo.png"
         self.file_docx = "album_template.docx"
         self.output_path = Path("./generated_template.docx")
-        self.data_images = Path("./data_images")
+        self.resized_images_store = Path("./resized_images_store")
         self.blank_image = "blank_image"
+        '''
+        if self.resized_images_store.exists():
+            shutil.rmtree(self.resized_images_store)
+            logger.info(f"Cleaned up resized images directory: {self.resized_images_store}")
         
+        # Создаём пустую директорию и два пустых изображения
+        self.create_folder(self.resized_images_store)
+        '''
     @property
     def format_name(self) -> str:
         return "docxtpl"
@@ -54,6 +63,8 @@ class DocxTplRenderer(ReportRenderer):
     
     def create_folder(self, folder: Path) -> None:
         """Создать папку для фотографий """
+        if os.path.exists(folder):
+            return
         folder.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created/verified directory for images: {folder.resolve()}")
         self.create_blank_image(folder.resolve())
@@ -71,8 +82,8 @@ class DocxTplRenderer(ReportRenderer):
     def supports_preview(self) -> bool:
         return False
     
-    async def fetch_async_data(self, client, item) -> str | Literal[0, 1]:
-        file_name = str(Path(self.data_images) / item['name'])
+    async def fetch_async_data(self, client, item) -> str | bool:
+        file_name = str(Path(self.resized_images_store) / item['name'])
         # Если файл уже есть — пропускаем загрузку
         if os.path.isfile(file_name):
             return False
@@ -134,9 +145,14 @@ class DocxTplRenderer(ReportRenderer):
         for row in query_results["data"]:
             image_keys = [ key for key in row.keys() if "image_id" in key ]
             for image in image_keys:
-                if row.get(image):
-                    url = s3_image_service.image_url(row.get(image))
-                    urls_collection.append({"name": row.get(image), "url": url})
+                image_obj = row.get(image)
+                if image_obj:
+                    if isinstance(image_obj, list):
+                        print(f"ROW GET IMAGE: {image_obj}")  # development
+                        url = s3_image_service.image_url(image_obj[0])
+                    else:
+                        url = s3_image_service.image_url(image_obj)
+                    urls_collection.append({"name": image_obj, "url": url})
 
         if not urls_collection:
             return
@@ -168,35 +184,19 @@ class DocxTplRenderer(ReportRenderer):
             doc = DocxTemplate(docx_file)
             logo_image = InlineImage(doc, image_descriptor=f"{report.path}/{self.logoname}", width=Mm(40))
 
-            inspection_summary = {}
-            for item in self.query_results["inspection_summary"]:
-                if inspection_summary.get(item["facility_name"]):
-                    inspection_summary[item["facility_name"]].append(item)
-                else:
-                    inspection_summary[item["facility_name"]] = [item]
-
+            jinja_env = self.template_renderer._create_environment(report) # development
+        
             for row in self.query_results["data"]:
-                group_label = ""
-                if row["criticality"] == "CRITICAL" and row["is_panel"] == "MOTOR":
-                    group_label = "Критические дефекты двигателей"
-                elif row["criticality"] == "CRITICAL" and row["is_panel"] == "PANEL":
-                    group_label = "Критические дефекты распределительных устройств"
-                elif row["criticality"] == "EMERGENCY" and row["is_panel"] == "MOTOR":
-                    group_label = "Аварийные дефекты двигателей"
-                elif row["criticality"] == "EMERGENCY" and row["is_panel"] == "PANEL":
-                    group_label = "Аварийные дефекты распределительных устройств"
-                elif row["criticality"] == "DEVELOPING" and row["is_panel"] == "MOTOR":
-                    group_label = "Развивающиеся дефекты двигателей"
-                else:
-                    group_label = "Развивающиеся дефекты панелей"
-
                 pictures = []
                 image_keys = [ key for key in row.keys() if "image_id" in key ]
                 for idx, image in enumerate(image_keys):
-                    if row.get(image) and os.path.isfile(str(Path(self.data_images) / row.get(image))):
-                        image_descriptor=f"{self.data_images}/{row.get(image)}"
+                    image_obj = row.get(image)
+                    if isinstance(image_obj, list): # development
+                        image_obj = image_obj[0]
+                    if image_obj and os.path.isfile(str(Path(self.resized_images_store) / image_obj)):
+                        image_descriptor=f"{self.resized_images_store}/{image_obj}"
                     else:
-                        image_descriptor=f"{self.data_images}/{self.blank_image}_{idx}.jpg"
+                        image_descriptor=f"{self.resized_images_store}/{self.blank_image}_{idx}.jpg"
                     picture = InlineImage(
                         doc, 
                         image_descriptor=image_descriptor, 
@@ -204,17 +204,13 @@ class DocxTplRenderer(ReportRenderer):
                     )
                     pictures.append(picture)
 
-                row["full_equipment_name"] = row["full_equipment_name"].replace(">", "\n")
-                row["defect_type_name"] = f"{row['defect_type_name']} *"
-                row["group_label"] = group_label
+                print(f"ROW: {row}")  # development
                 row["pictures"] = pictures
-                row["sticker_name"] = row["sticker_name"].replace("°С", " °С")
 
             context = {
                 "params": params,
                 "logo_image": logo_image,
                 "queries": self.query_results,
-                "inspection_summary": inspection_summary,
                 "globals": {
                         "template_name": report.id,
                         "report_name": report.metadata.name,
@@ -223,16 +219,14 @@ class DocxTplRenderer(ReportRenderer):
                 },
                 "page_break": "\f",
             }
-            doc.render(context)
-            doc.save(self.output_path)
-            docx_bytes = self.output_path.read_bytes()
-        except Exception as e:
-            logger.error(f"DOCX rendering failed: {e}")
-            raise RuntimeError(f"DOCX rendering failed: {e}")
-        finally:
-            # Удалим сгенерированный файл
-            self.output_path.unlink(missing_ok=True)
-        return docx_bytes
+            doc.render(context, jinja_env)
+            file_stream = io.BytesIO()
+            doc.save(file_stream)
+            file_stream.seek(0)
+        except Exception as exc:
+            logger.error(f"DOCX rendering failed: {exc}")
+            raise RuntimeError(f"DOCX rendering failed: {exc}")
+        return file_stream.getvalue()
 
     async def render(
         self,
@@ -262,8 +256,8 @@ class DocxTplRenderer(ReportRenderer):
                 absolute_path = report.path.resolve()
                 base_url = absolute_path.as_uri()
 
-            # создаем папку для изображений, если ее нет
-            await asyncio.to_thread(self.create_folder, self.data_images)
+            # создаем папку с resized images если ее нет
+            await asyncio.to_thread(self.create_folder, self.resized_images_store)
 
             # скачиваем изображения
             await self.fetch_images(query_results)

@@ -17,7 +17,7 @@ from render.services.repository import Report
 def renderer():
     """Создаёт экземпляр DocxTplRenderer с временными путями."""
     r = DocxTplRenderer()
-    r.data_images = Path(tempfile.mkdtemp(prefix="test_data_images_"))
+    r.resized_images_store = Path(tempfile.mkdtemp(prefix="test_resized_images_store_"))
     r.output_path = Path(tempfile.mktemp(suffix=".docx"))
     return r
 
@@ -126,7 +126,7 @@ async def test_create_folder_creates_directory(renderer, tmp_path):
 async def test_fetch_async_data_downloads_new_image(renderer, tmp_path, item, valid_image_bytes):
     # Подготовка
     file_name = tmp_path / "test_image.jpg"
-    renderer.data_images = tmp_path
+    renderer.resized_images_store = tmp_path
 
     # Создаём мок для client
     mock_response = MagicMock()
@@ -152,7 +152,7 @@ async def test_fetch_async_data_downloads_new_image(renderer, tmp_path, item, va
 async def test_fetch_async_data_downloads_broken_image(renderer, tmp_path, item):
     # Подготовка
     file_name = tmp_path / "test_image.jpg"
-    renderer.data_images = tmp_path
+    renderer.resized_images_store = tmp_path
 
     # Создаём мок для client
     mock_response = MagicMock()
@@ -180,7 +180,7 @@ async def test_fetch_async_data_uses_cached_image(renderer, tmp_path, item):
     # Подготовка
     file_name = tmp_path / "test_image.jpg"
     file_name.write_bytes(b"cached_content")
-    renderer.data_images = tmp_path
+    renderer.resized_images_store = tmp_path
 
     client = AsyncMock()
 
@@ -194,7 +194,7 @@ async def test_fetch_async_data_uses_cached_image(renderer, tmp_path, item):
 
 @pytest.mark.asyncio
 async def test_fetch_async_data_timeout_error(renderer, tmp_path, item):
-    renderer.data_images = tmp_path
+    renderer.resized_images_store = tmp_path
 
     client = MagicMock()
     client.stream = MagicMock(
