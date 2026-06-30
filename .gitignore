@@ -26,6 +26,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+el_reports/
 
 # Testing
 .pytest_cache/
@@ -59,6 +60,9 @@ output/
 # OS
 .DS_Store
 Thumbs.db
+
+# Reflex
+reflex.lock
 
 uploaded_files
 
