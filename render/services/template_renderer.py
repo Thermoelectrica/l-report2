@@ -2,7 +2,9 @@
 
 import locale
 import logging
+import math
 from datetime import datetime
+import re
 from typing import Any, Dict, List
 from pathlib import Path
 
@@ -21,30 +23,43 @@ class TemplateRenderer:
     def __init__ (self):
         self.file_template = "index.html.j2"
 
-    def t_sticker_parser(self, sticker: str) -> str: # development
+    def t_sticker_parser(self, sticker: str) -> int:
         """ Извлекает префикс стикера до первого дефиса. """
         if not isinstance(sticker, str):
-            raise TypeError(f"Expected str, got {type(sticker).__name__}")
-        return sticker.split("-", 1)[0]
-    
-    def group_label_parser(self, row: Dict[str, Any]) -> str: # development
+            return 0
+        try:
+            value = re.search(r'\d+', sticker).group()
+        except AttributeError:
+            return 0
+        return int(value)
+       
+    def group_label_parser(self, row: Dict[str, Any]) -> str:
         """ Определяет группу дефектов на основе критичности и типа оборудования. """
         group_label = ""
         if row["criticality"] == "CRITICAL" and row["is_panel"] == "MOTOR":
-            group_label = "ЭД: Превышение наибольшей допустимой температуры на 30 °С и выше"
+            group_label = "Дефекты электродвигателей с высоким риском отказа."
         elif row["criticality"] == "CRITICAL" and row["is_panel"] == "PANEL":
-            group_label = "РУ: Превышение наибольшей допустимой температуры на 30 °С и выше"
+            group_label = (
+                "Дефекты распределительных устройств с превышением "
+                "наибольшей допустимой температуры и требующие повышенного внимания."
+            )
         elif row["criticality"] == "EMERGENCY" and row["is_panel"] == "MOTOR":
-            group_label = "ЭД: Превышение наибольшей допустимой температуры"
+            group_label = (
+                "Дефекты электродвигателей с превышением "
+                "наибольшей допустимой температуры."
+            )
         elif row["criticality"] == "EMERGENCY" and row["is_panel"] == "PANEL":
-            group_label = "РУ: Превышение наибольшей допустимой температуры"
+            group_label = (
+                "Дефекты распределительных устройств с превышением "
+                "наибольшей допустимой температуры."
+            )
         elif row["criticality"] == "DEVELOPING" and row["is_panel"] == "MOTOR":
-            group_label = "ЭД: Развивающиеся дефекты"
+            group_label = "Начальная стадия развития дефекта."
         else:
-            group_label = "РУ: Развивающиеся дефекты"
+            group_label = "Начальная стадия развития дефекта."
         return group_label
     
-    def inspection_summary_parser(  # development
+    def inspection_summary_parser(
             self, 
             inspect_summary: List[Dict[str, Any]]
         ) -> Dict[str, List[Dict[str, Any]]]:
@@ -57,23 +72,28 @@ class TemplateRenderer:
             else:
                 inspection_summary[key] = [item]
         return inspection_summary
+    
+    def output_parser(self, number: float) -> str:
+        """Формирует строку-условие для превышения температуры, округляя значение до ближайших 10°C."""
+        result = math.floor(number / 10) * 10
+        if result >= 200:
+            result = 200
+        cond_string = f" более чем на {result} °C"
+        if result == 0:
+            cond_string = ""
+        return cond_string
 
-    def full_equipment_name_parser(self, equipment: str) -> str: # development
+    def full_equipment_name_parser(self, equipment: str) -> str:
         """" Преобразует имя оборудования, заменяя символы ">" на перенос строки "\n". """
         if not isinstance(equipment, str):
             raise TypeError(f"Expected str, got {type(equipment).__name__}")
         return equipment.replace(">", "\n")
     
-    def sticker_name_parser(self, sticker: str) -> str: # development
+    def sticker_name_parser(self, sticker: str) -> str:
         """" Добавляет пробел перед °С. """
         if not isinstance(sticker, str):
             raise TypeError(f"Expected str, got {type(sticker).__name__}")
         return sticker.replace("°С", " °С")
-    
-    def delta_max_allowed_calc(self, item: Dict[str, Any]) -> float: # development
-        """" Расчет наибольшей допустимой температуры """
-        print(f"НАИБ ДОП: {item}")
-        return item.get("t_observed_excess_50")
 
     def _create_environment(self, report: Report) -> Environment:
         """Create Jinja2 environment for specific report."""
@@ -96,12 +116,12 @@ class TemplateRenderer:
         env.filters["format_datetime"] = lambda x: (
             x.strftime("«%d» %B %Y г. %H:%M") if x else ""
         )
-        env.filters["t_sticker_parser"] = self.t_sticker_parser # development
-        env.filters["group_label_parser"] = self.group_label_parser # development
-        env.filters["inspection_summary_parser"] = self.inspection_summary_parser # development
-        env.filters["full_equipment_name_parser"] = self.full_equipment_name_parser # development
-        env.filters["sticker_name_parser"] = self.sticker_name_parser # development
-        env.filters["delta_max_allowed_calc"] = self.delta_max_allowed_calc # development
+        env.filters["t_sticker_parser"] = self.t_sticker_parser
+        env.filters["group_label_parser"] = self.group_label_parser
+        env.filters["inspection_summary_parser"] = self.inspection_summary_parser
+        env.filters["full_equipment_name_parser"] = self.full_equipment_name_parser
+        env.filters["sticker_name_parser"] = self.sticker_name_parser
+        env.filters["output_parser"] = self.output_parser
 
         # Add S3 image URL filter
         env.filters["image_url"] = s3_image_service.image_url
