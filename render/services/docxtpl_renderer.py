@@ -227,7 +227,7 @@ class DocxTplRenderer(ReportRenderer):
                         width=Mm(67),
                     )
                     pictures.append(picture)
-
+                    
                 row["pictures"] = pictures
 
             context = {
@@ -241,6 +241,7 @@ class DocxTplRenderer(ReportRenderer):
                         "version": report.metadata.version,
                 },
                 "page_break": "\f",
+                "debug": False, # выводим отладочную информацию
             }
             
             doc.render(context, jinja_env)
