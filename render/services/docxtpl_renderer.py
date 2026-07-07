@@ -1,6 +1,7 @@
 """DOCX_TPL generator for DOCX output."""
 
 import asyncio
+from decimal import Decimal
 import shutil
 from datetime import datetime
 import io
@@ -45,6 +46,98 @@ class DocxTplRenderer(ReportRenderer):
     @property
     def file_extension(self) -> str:
         return "docx"
+    
+    def defect_summary(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """ Определяет группу дефектов на основе методики. """
+        group_label = ""
+        t_max = row.get("t_max") or 0
+        t_sticker_min = row.get("t_sticker_min") or 0
+        if t_sticker_min == 0:
+            t_sticker_min = template_renderer.t_sticker_parser(row["t_sticker"]) or t_max
+        t_observed  = row.get("t_observed") or t_max
+        excess_sticker = t_sticker_min - t_max
+        excess_thermal = t_observed - t_max
+        t_similar_unit = row.get("t_similar_unit", 0) or 0
+        t_anomaly = (t_observed - t_similar_unit) if t_similar_unit else 0
+        max_excess = max(excess_sticker, excess_thermal)
+        print(f"CRITICAL, unit_name: {row['unit_name']}, equipment_type_name: {row['equipment_type_name']}, is_panel: {row['is_panel']}, t_similar_unit: {row['t_similar_unit']}, t_max: {t_max}, t_sticker_min: {t_sticker_min}, t_observed: {t_observed}, max_excess: {max_excess}") # development
+        if row["is_panel"] == "MOTOR":
+            group_label = "Начальная стадия развития дефекта."
+            defect_weight = 6
+            if (
+                row["defect_type_short_name"] == "Качение" and t_sticker_min >= 110 or
+                row["defect_type_short_name"] == "Скольжение" and t_sticker_min >= 80 or
+                row["defect_type_short_name"] in [
+                    "Ток.вед часть (Изол Y)", 
+                    "Ток.вед часть (Изол A)",
+                    "Ток.вед часть (Изол E)",
+                ] and t_sticker_min >= 110 or
+                row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and t_sticker_min >= 95 or
+                row["is_test_ready"] and t_anomaly >= 15
+            ):
+                group_label = (
+                    "Превышение установленного абсолютного значения "
+                    "наибольшей допустимой температуры. Высокий риск отказа электродвигателя."
+                )
+                defect_weight = 4
+            elif (
+                row["defect_type_short_name"] == "Качение" and 80 <= t_sticker_min < 110 or
+                row["defect_type_short_name"] == "Скольжение" and 70 <= t_sticker_min < 80 or
+                row["defect_type_short_name"] in [
+                    "Ток.вед часть (Изол Y)", 
+                    "Ток.вед часть (Изол A)",
+                    "Ток.вед часть (Изол E)",
+                ] and 100 <= t_sticker_min < 110 or
+                row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and 80 <= t_sticker_min < 95 or
+                0 < t_anomaly < 15
+            ):
+                group_label = (
+                    "Превышение установленного абсолютного значения "
+                    "наибольшей допустимой температуры."
+                )
+                defect_weight = 5
+        
+        if row["is_panel"] == "PANEL":
+            group_label = "Начальная стадия развития дефекта."
+            defect_weight = 3
+            t_environment = row.get("t_environment", 0) or 0
+            delta_t = t_observed - t_environment
+            nominal = row.get("nominal_current", 1) or 1
+            measured = row.get("measured_current", 1) or 1
+            excess_temp_to_current = float(delta_t) * (nominal / measured) ** 2
+            excess_temp_to_half_current = (
+                float(t_observed - t_similar_unit) * (0.5 * nominal / measured) ** 2
+            )
+            t_excess = row.get("t_excess", 0) or 0
+            is_test_ready = row.get("is_test_ready", True) or True
+            current06_cond = (nominal * 0.6 <= measured < nominal) and is_test_ready
+            current03_cond = (nominal * 0.3 <= measured < nominal * 0.6) and is_test_ready
+            print(f"CRITICAL PANEL, excess_temp_to_current: {excess_temp_to_current}, excess_temp_to_half_current: {excess_temp_to_half_current}, t_excess: {t_excess}")
+            if (
+                row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and max_excess >= 30 or
+                row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and max_excess >= 80 or
+                row["is_attention_required"] is True
+            ):
+                group_label = (
+                    "Дефекты распределительных устройств с превышением "
+                    "наибольшей допустимой температуры и требующие повышенного внимания."
+                )
+                defect_weight = 1
+            elif (
+                row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and 0 < max_excess < 30 or
+                row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and 70 <= max_excess < 80 or
+                delta_t >= t_excess or
+                current06_cond and (excess_temp_to_current >= t_excess) or
+                current03_cond and (excess_temp_to_half_current >= t_excess)
+            ):
+                group_label = (
+                    "Дефекты распределительных устройств с превышением "
+                    "наибольшей допустимой температуры."
+                )
+                defect_weight = 2
+        row["group_label"] = group_label
+        row["defect_weight"] = defect_weight
+        return row
     
     def create_blank_image(self, folder) -> Image:
         """Создать два пустых изображения в новой папке """
@@ -202,6 +295,14 @@ class DocxTplRenderer(ReportRenderer):
             logo_image = InlineImage(doc, image_descriptor=f"{report.path}/{self.logoname}", width=Mm(40))
 
             jinja_env = template_renderer._create_environment(report)
+            
+            # Расчитываем текстовый вывод по группам дефектов
+            data_with_summary = [
+                self.defect_summary(row) for row in self.query_results["data"]
+            ]
+            
+            # Сортируем список по весу дефекта
+            self.query_results["data"] = sorted(data_with_summary, key=lambda x: x["defect_weight"])
         
             for row in self.query_results["data"]:
                 pictures = []
@@ -227,7 +328,9 @@ class DocxTplRenderer(ReportRenderer):
                         width=Mm(67),
                     )
                     pictures.append(picture)
-                    
+
+                if "РУ-0,4 кВ Секция 7Н1В" in row["full_equipment_name"]:
+                    print(f"ROW: {row}") # development
                 row["pictures"] = pictures
 
             context = {
@@ -241,7 +344,7 @@ class DocxTplRenderer(ReportRenderer):
                         "version": report.metadata.version,
                 },
                 "page_break": "\f",
-                "debug": False, # выводим отладочную информацию
+                "debug": True, # выводим отладочную информацию
             }
             
             doc.render(context, jinja_env)

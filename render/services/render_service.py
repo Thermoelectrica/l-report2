@@ -390,6 +390,8 @@ class RenderServiceImpl(RenderServiceInterface):
                     render.error_message = None
                 else:
                     # Create new record
+                    pass
+                    '''
                     render = Render(
                         parameter_hash=cache_key,
                         report_id=report_id,
@@ -400,7 +402,7 @@ class RenderServiceImpl(RenderServiceInterface):
                         file_extension="pdf",  # Will be updated after generation
                     )
                     db.add(render)
-
+                    '''
                 await db.commit()
 
                 # Get report
@@ -433,6 +435,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 logger.info(f"Output stored at: {output_path}")
 
                 # Update status to completed
+                '''
                 render.status = RenderStatus.COMPLETED.value
                 render.completed_at = datetime.utcnow()
                 render.output_path = output_path
@@ -440,6 +443,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 render.file_extension = file_extension
                 render.file_size_bytes = len(output_bytes)
                 await db.commit()
+                '''
 
                 logger.info(f"Render completed successfully: {cache_key[:8]}")
 

@@ -49,65 +49,6 @@ class TemplateRenderer:
         except AttributeError:
             return 0
         return int(value)
-       
-    def group_label_parser(self, row: Dict[str, Any]) -> str:
-        """ Определяет группу дефектов на основе критичности и типа оборудования. """
-        group_label = ""
-        if row["criticality"] == "CRITICAL" and row["is_panel"] == "MOTOR":
-            group_label = "Дефекты электродвигателей с высоким риском отказа."
-        elif row["criticality"] == "CRITICAL" and row["is_panel"] == "PANEL":
-            group_label = (
-                "Дефекты распределительных устройств с превышением "
-                "наибольшей допустимой температуры и требующие повышенного внимания."
-            )
-        elif row["criticality"] == "EMERGENCY" and row["is_panel"] == "MOTOR":
-            group_label = (
-                "Дефекты электродвигателей с превышением "
-                "наибольшей допустимой температуры."
-            )
-        elif row["criticality"] == "EMERGENCY" and row["is_panel"] == "PANEL":
-            group_label = (
-                "Дефекты распределительных устройств с превышением "
-                "наибольшей допустимой температуры."
-            )
-        elif row["criticality"] == "DEVELOPING" and row["is_panel"] == "MOTOR":
-            group_label = "Начальная стадия развития дефекта."
-        else:
-            group_label = "Начальная стадия развития дефекта."
-        return group_label
-    
-    def critical_parser(self, row: Dict[str, Any]) -> str:
-        """ Определяет группу дефектов на основе методики. """
-        group_label = ""
-        t_max = row.get("t_max") or 0
-        t_sticker_min = row.get("t_sticker_min") or 0
-        if t_sticker_min == 0:
-            t_sticker_min = self.t_sticker_parser(row["t_sticker"]) or t_max
-        t_observed  = row.get("t_observed") or t_max
-        excess_sticker = t_sticker_min - t_max
-        excess_thermal = t_observed - t_max
-        max_excess = max(excess_sticker, excess_thermal)
-        print(f"CRITICAL, unit_name: {row['unit_name']}, t_max: {t_max}, t_sticker_min: {t_sticker_min}, t_observed: {t_observed}, max_excess: {max_excess}") # development_max: {t_max}, t_sticker_min: {t_sticker_min}, t_observed: {t_observed}, max_excess: {max_excess}") # development
-        if row["is_panel"] == "MOTOR" and max_excess >= 30:
-            group_label = "Дефекты электродвигателей с высоким риском отказа."
-        elif row["is_panel"] == "PANEL" and max_excess >= 30:
-            group_label = (
-                "Дефекты распределительных устройств с превышением "
-                "наибольшей допустимой температуры и требующие повышенного внимания."
-            )
-        elif row["is_panel"] == "MOTOR" and (0 <= max_excess < 30):
-            group_label = (
-                "Дефекты электродвигателей с превышением "
-                "наибольшей допустимой температуры."
-            )
-        elif row["is_panel"] == "PANEL" and (0 <= max_excess < 30):
-            group_label = (
-                "Дефекты распределительных устройств с превышением "
-                "наибольшей допустимой температуры."
-            )
-        else:
-            group_label = "Начальная стадия развития дефекта."
-        return group_label
     
     def inspection_summary_parser(
             self, 
@@ -167,14 +108,12 @@ class TemplateRenderer:
             x.strftime("«%d» %B %Y г. %H:%M") if x else ""
         )
         env.filters["t_sticker_parser"] = self.t_sticker_parser
-        env.filters["group_label_parser"] = self.group_label_parser
         env.filters["inspection_summary_parser"] = self.inspection_summary_parser
         env.filters["full_equipment_name_parser"] = self.full_equipment_name_parser
         env.filters["sticker_name_parser"] = self.sticker_name_parser
         env.filters["output_parser"] = self.output_parser
         env.filters["equipment_parser"] = self.equipment_parser
         env.filters["add_day_parser"] = lambda dt, days=1: self.add_day_parser(dt, days)
-        # env.filters["critical_parser"] = self.critical_parser  # Пока не используется
 
         # Add S3 image URL filter
         env.filters["image_url"] = s3_image_service.image_url
