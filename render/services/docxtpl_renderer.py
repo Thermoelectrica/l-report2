@@ -1,14 +1,12 @@
 """DOCX_TPL generator for DOCX output."""
 
 import asyncio
-from decimal import Decimal
-import shutil
 from datetime import datetime
 import io
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List
 import locale
 
 from PIL import Image
@@ -18,7 +16,7 @@ import httpx
 
 from .report_renderer import ReportRenderer
 from .repository import Report
-from .template_renderer import TemplateRenderer, template_renderer
+from .template_renderer import template_renderer
 from .s3_image_service import s3_image_service
 
 logger = logging.getLogger(__name__)
@@ -60,7 +58,6 @@ class DocxTplRenderer(ReportRenderer):
         t_similar_unit = row.get("t_similar_unit", 0) or 0
         t_anomaly = (t_observed - t_similar_unit) if t_similar_unit else 0
         max_excess = max(excess_sticker, excess_thermal)
-        print(f"CRITICAL, unit_name: {row['unit_name']}, equipment_type_name: {row['equipment_type_name']}, is_panel: {row['is_panel']}, t_similar_unit: {row['t_similar_unit']}, t_max: {t_max}, t_sticker_min: {t_sticker_min}, t_observed: {t_observed}, max_excess: {max_excess}") # development
         if row["is_panel"] == "MOTOR":
             group_label = "Начальная стадия развития дефекта."
             defect_weight = 6
@@ -109,14 +106,18 @@ class DocxTplRenderer(ReportRenderer):
                 float(t_observed - t_similar_unit) * (0.5 * nominal / measured) ** 2
             )
             t_excess = row.get("t_excess", 0) or 0
-            is_test_ready = row.get("is_test_ready", True) or True
+            is_test_ready = row.get("is_test_ready", True)
             current06_cond = (nominal * 0.6 <= measured < nominal) and is_test_ready
             current03_cond = (nominal * 0.3 <= measured < nominal * 0.6) and is_test_ready
-            print(f"CRITICAL PANEL, excess_temp_to_current: {excess_temp_to_current}, excess_temp_to_half_current: {excess_temp_to_half_current}, t_excess: {t_excess}")
+            current00_cond = (0 <= measured < nominal * 0.3) and is_test_ready
             if (
                 row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and max_excess >= 30 or
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and max_excess >= 80 or
-                row["is_attention_required"] is True
+                row["is_attention_required"] is True or
+                (delta_t + 40 - t_max) > 150 or
+                current06_cond and (excess_temp_to_current + 40 - t_max) > 150 or
+                current03_cond and (excess_temp_to_half_current - 30) > 200 or
+                current00_cond and delta_t >= 30
             ):
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
@@ -126,9 +127,12 @@ class DocxTplRenderer(ReportRenderer):
             elif (
                 row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and 0 < max_excess < 30 or
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and 70 <= max_excess < 80 or
-                delta_t >= t_excess or
+                is_test_ready and delta_t >= t_excess or
                 current06_cond and (excess_temp_to_current >= t_excess) or
-                current03_cond and (excess_temp_to_half_current >= t_excess)
+                current03_cond and (excess_temp_to_half_current >= t_excess) or
+                current03_cond and ((excess_temp_to_half_current - 30) >= 0) or
+                current00_cond and delta_t >= 10 or
+                is_test_ready is False and (t_sticker_min - t_max >= 0)
             ):
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
@@ -178,7 +182,7 @@ class DocxTplRenderer(ReportRenderer):
                 logger.warning(f"Failed to remove file {file_name}: {e}")
     
     async def fetch_async_data(self, client, item) -> str | bool:
-        file_name = str(Path(self.resized_images_store) / item['name'])
+        file_name = str(Path(self.resized_images_store) / item["name"])
         # Если файл уже есть — пропускаем загрузку
         if os.path.isfile(file_name):
             return False
@@ -329,8 +333,6 @@ class DocxTplRenderer(ReportRenderer):
                     )
                     pictures.append(picture)
 
-                if "РУ-0,4 кВ Секция 7Н1В" in row["full_equipment_name"]:
-                    print(f"ROW: {row}") # development
                 row["pictures"] = pictures
 
             context = {
@@ -343,8 +345,7 @@ class DocxTplRenderer(ReportRenderer):
                         "generated_at": datetime.utcnow().isoformat(),
                         "version": report.metadata.version,
                 },
-                "page_break": "\f",
-                "debug": True, # выводим отладочную информацию
+                "debug": False, # выводим отладочную информацию
             }
             
             doc.render(context, jinja_env)
