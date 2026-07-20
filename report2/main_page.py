@@ -130,14 +130,18 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 param.enum_values,
                 name=param.name,
                 value=param.value,
-                placeholder=f"Select {param.name}",
+                placeholder=rx.cond(
+                    param.placeholder,
+                    f"{param.placeholder}",
+                    f"Select {param.name}"
+                ),
                 on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
             # Plain text box
             rx.input(
                 name=param.name,
                 value=param.value,
-                placeholder=f"Enter {param.name}",
+                placeholder=f"{param.placeholder}",
                 type="text",
                 width="48%",
                 required=param.required,
@@ -178,7 +182,7 @@ def report_details_panel() -> rx.Component:
             # Parameters form
             rx.form(
                 rx.vstack(
-                    rx.heading("Parameters", size="4"),
+                    rx.heading("Заполните форму", size="4"),
                     rx.cond(
                         State.report_parameters,
                         rx.vstack(
@@ -194,16 +198,7 @@ def report_details_panel() -> rx.Component:
                     # Action buttons
                     rx.hstack(
                         rx.button(
-                            "Preview",
-                            type="submit",
-                            on_click=State.set_preview_mode,
-                            disabled=State.is_rendering,
-                            size="3",
-                            variant="soft",
-                            flex="1",
-                        ),
-                        rx.button(
-                            "Generate",
+                            "Создать документ",
                             type="submit",
                             disabled=State.is_rendering,
                             loading=State.is_rendering,
@@ -279,9 +274,9 @@ def index() -> rx.Component:
             # Header with user info and logout
             rx.hstack(
                 rx.vstack(
-                    rx.heading("PDF Report Generator", size="8"),
+                    rx.heading("Генератор отчетов", size="8"),
                     rx.text(
-                        "Select a report and configure parameters to generate PDF",
+                        "Выберите тип отчета, заполните форму и сгенерируйте документ",
                         size="3",
                         color="gray",
                     ),

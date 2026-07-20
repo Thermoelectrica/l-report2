@@ -11,5 +11,6 @@ class ParamInfo(BaseModel):
     type: str
     required: bool
     description: str
+    placeholder: str = ""
     enum_values: List[str] = []
     value: str = ""  # Current value (initialized with default, then tracks user input)
