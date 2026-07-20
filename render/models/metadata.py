@@ -98,7 +98,7 @@ class ReportMetadata(BaseModel):
     description: Optional[str] = None
     version: str = "1.0"
     format: str = Field(
-        description="Output format generator to use (weasyprint, etc.)"
+        description="Output format generator to use (weasyprint etc.)"
     )
     timeout: Optional[int] = Field(
         default=None, description="Maximum rendering time in seconds"

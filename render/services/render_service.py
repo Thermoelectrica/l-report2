@@ -23,7 +23,7 @@ from ..models import (
 )
 from ..storage import get_storage
 from .interface import RenderService as RenderServiceInterface
-from .generator_registry import generator_registry
+from .renderer_registry import renderer_registry
 from .query_executor import query_executor
 from .repository import repository
 from .template_renderer import template_renderer
@@ -87,6 +87,16 @@ class RenderServiceImpl(RenderServiceInterface):
         except Exception as e:
             logger.error(f"Failed to parse enum query file {query_file}: {e}")
             return []
+        
+    async def get_generator(report_id: str) -> str:
+        """ Get generator for specified format """
+        report = repository.get_report(report_id)
+        metadata = report.metadata
+        output_format = metadata.format
+        logger.info(f"Loaded report: {report_id}, format: {output_format}")
+
+        # Get appropriate generator
+        return renderer_registry.get_generator(output_format)
 
     async def getReportMetadata(self, report_id: str) -> ReportMetadata:
         """Get detailed metadata for a specific report with resolved dynamic enums."""
@@ -390,7 +400,6 @@ class RenderServiceImpl(RenderServiceInterface):
                         file_extension="pdf",  # Will be updated after generation
                     )
                     db.add(render)
-
                 await db.commit()
 
                 # Get report
@@ -401,22 +410,16 @@ class RenderServiceImpl(RenderServiceInterface):
                 logger.info(f"Loaded report: {report_id}, format: {output_format}")
 
                 # Get appropriate generator
-                generator = generator_registry.get_generator(output_format)
+                generator = renderer_registry.get_generator(output_format)
 
                 # Execute queries
                 query_results = await query_executor.execute_queries(report, params)
                 logger.info(f"Executed {len(query_results)} queries")
 
                 # Render template
-                source_content = template_renderer.render(report, params, query_results)
+                output_bytes = await generator.render(report, params, query_results)
                 logger.info("Template rendered successfully")
 
-                # Generate output using selected generator
-                output_bytes = await generator.generate(
-                    source_content=source_content,
-                    source_path=report.path,
-                    base_url=None
-                )
                 file_extension = generator.file_extension
                 
                 logger.info(
@@ -496,12 +499,18 @@ class RenderServiceImpl(RenderServiceInterface):
             report = repository.get_report(report_id)
             logger.info(f"Loaded report: {report_id}")
 
+            metadata = report.metadata
+            output_format = metadata.format
+                
+            # Get appropriate generator
+            generator = renderer_registry.get_generator(output_format)
+
             # Execute queries
             query_results = await query_executor.execute_queries(report, params)
             logger.info(f"Executed {len(query_results)} queries")
 
             # Render template to HTML
-            html_content = template_renderer.render(report, params, query_results)
+            html_content = await generator.render_preview(report, params, query_results)
             logger.info(f"Template rendered successfully, HTML length: {len(html_content)} chars")
 
             return html_content

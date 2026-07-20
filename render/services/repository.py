@@ -18,7 +18,6 @@ class Report:
     def __init__(self, path: Path, metadata: ReportMetadata):
         self.path = path
         self.metadata = metadata
-        self.template_path = path / "index.html.j2"
         self.query_files = sorted(path.glob("*.sql"))
 
     @property
@@ -64,12 +63,9 @@ class ReportRepository:
         """Load and validate a single report."""
         # Check for required files
         metadata_file = report_dir / "metadata.yaml"
-        template_file = report_dir / "index.html.j2"
 
         if not metadata_file.exists():
             raise ValueError(f"Missing metadata.yaml in {report_dir.name}")
-        if not template_file.exists():
-            raise ValueError(f"Missing index.html.j2 in {report_dir.name}")
 
         # Check for at least one SQL file
         sql_files = list(report_dir.glob("*.sql"))

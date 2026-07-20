@@ -30,10 +30,6 @@ parameters:
     required: true
     description: "User ID"
 """)
-
-        # Create template
-        (report_dir / "index.html.j2").write_text("<html><body>Test</body></html>")
-
         # Create SQL query
         (report_dir / "query.sql").write_text(
             "SELECT * FROM users WHERE id = :user_id;"
@@ -67,7 +63,6 @@ parameters:
     type: integer
     required: true
 """)
-        (report_dir / "index.html.j2").write_text("<html></html>")
         (report_dir / "sales.sql").write_text("SELECT * FROM sales;")
 
         repo = ReportRepository(str(temp_reports_dir))
@@ -94,8 +89,6 @@ parameters:
         """Test report without metadata.yaml is skipped."""
         report_dir = temp_reports_dir / "invalid-report"
         report_dir.mkdir()
-        (report_dir / "index.html.j2").write_text("<html></html>")
-        (report_dir / "query.sql").write_text("SELECT 1;")
 
         repo = ReportRepository(str(temp_reports_dir))
 
@@ -106,8 +99,6 @@ parameters:
         """Test report without template is skipped."""
         report_dir = temp_reports_dir / "invalid-report"
         report_dir.mkdir()
-        (report_dir / "metadata.yaml").write_text("name: Test\nformat: weasyprint\n")
-        (report_dir / "query.sql").write_text("SELECT 1;")
 
         repo = ReportRepository(str(temp_reports_dir))
 
@@ -118,8 +109,6 @@ parameters:
         """Test report without SQL files is skipped."""
         report_dir = temp_reports_dir / "invalid-report"
         report_dir.mkdir()
-        (report_dir / "metadata.yaml").write_text("name: Test\nformat: weasyprint\n")
-        (report_dir / "index.html.j2").write_text("<html></html>")
 
         repo = ReportRepository(str(temp_reports_dir))
 
@@ -132,14 +121,12 @@ parameters:
         report1 = temp_reports_dir / "report1"
         report1.mkdir()
         (report1 / "metadata.yaml").write_text("name: Report 1\nformat: weasyprint\n")
-        (report1 / "index.html.j2").write_text("<html></html>")
         (report1 / "query.sql").write_text("SELECT 1;")
 
         # Create second report
         report2 = temp_reports_dir / "report2"
         report2.mkdir()
         (report2 / "metadata.yaml").write_text("name: Report 2\nformat: weasyprint\n")
-        (report2 / "index.html.j2").write_text("<html></html>")
         (report2 / "query.sql").write_text("SELECT 2;")
 
         repo = ReportRepository(str(temp_reports_dir))
@@ -155,7 +142,6 @@ parameters:
         report_dir = temp_reports_dir / "test-report"
         report_dir.mkdir()
         (report_dir / "metadata.yaml").write_text("name: Test\nformat: weasyprint\n")
-        (report_dir / "index.html.j2").write_text("<html></html>")
         (report_dir / "query.sql").write_text("SELECT 1;")
 
         repo = ReportRepository(str(temp_reports_dir))
@@ -165,7 +151,6 @@ parameters:
         report2_dir = temp_reports_dir / "new-report"
         report2_dir.mkdir()
         (report2_dir / "metadata.yaml").write_text("name: New\nformat: weasyprint\n")
-        (report2_dir / "index.html.j2").write_text("<html></html>")
         (report2_dir / "query.sql").write_text("SELECT 2;")
 
         # Reload
@@ -180,7 +165,6 @@ class TestReport:
         """Test Report object properties."""
         assert mock_report.id == "test-report"
         assert mock_report.metadata.name == "Test Report"
-        assert mock_report.template_path.name == "index.html.j2"
         assert len(mock_report.query_files) > 0
 
     def test_query_files_sorted(self, temp_reports_dir: Path, sample_report_metadata):

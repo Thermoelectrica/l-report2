@@ -61,9 +61,11 @@ output/
 .DS_Store
 Thumbs.db
 
-# Reflex
-reflex.lock
+# Temporary lock files
+.~lock*
+~lock*
 
 uploaded_files
-
+resized_images_store
+el_reports
 sample_reports/inspection-rep*
