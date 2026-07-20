@@ -220,7 +220,7 @@ class State(AuthState):
         try:
             # Update status
             async with self:
-                self.render_status = "Rendering PDF..."
+                self.render_status = "Rendering..."
 
             # Execute render directly - no polling needed
             result = await render_service.executeRender(
@@ -236,10 +236,7 @@ class State(AuthState):
                     # Initiate file download using Reflex's upload URL mechanism
                     if result.file_path:
                         download_url = rx.get_upload_url(result.file_path)
-                        return rx.download(url=download_url, filename=f"{report_id}.pdf")
-                        download_url = f"/_upload/{result.file_path}"
-                        logger.warning(download_url)
-                        return rx.redirect(path=download_url, is_external=True)
+                        return rx.download(url=download_url, filename=result.filename)
                 elif result.status == RenderStatus.FAILED:
                     self.render_status = "Failed"
                     self.render_error = result.error_message or "Unknown error"
