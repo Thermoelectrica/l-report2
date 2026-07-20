@@ -170,9 +170,21 @@ sudo -u "$SERVICE_USER" "$VENV_DIR/bin/alembic" upgrade head || {
 echo -e "${GREEN}✓ Database migrations completed${NC}"
 
 # Build Reflex frontend (export static assets)
+# API_URL must be set so the built JS bakes in the correct backend WebSocket/HTTP URLs.
+# Read API_URL from the installed .env if not already set in the environment.
 echo -e "${YELLOW}Building Reflex frontend (this may take a while)...${NC}"
+if [ -z "${API_URL:-}" ]; then
+    if [ -f "$INSTALL_DIR/.env" ]; then
+        API_URL=$(grep -E '^API_URL=' "$INSTALL_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'")
+    fi
+fi
+if [ -z "${API_URL:-}" ]; then
+    echo -e "${RED}Error: API_URL is not set. Add API_URL=https://your-domain.example.com to .env${NC}"
+    exit 1
+fi
+echo -e "${YELLOW}  Using API_URL=$API_URL${NC}"
 cd "$SCRIPT_DIR"
-"$VENV_DIR/bin/reflex" export --frontend-only --no-zip || {
+API_URL="$API_URL" "$VENV_DIR/bin/reflex" export --frontend-only --no-zip || {
     echo -e "${RED}Error: Reflex frontend build failed${NC}"
     exit 1
 }
