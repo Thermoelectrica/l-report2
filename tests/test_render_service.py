@@ -279,8 +279,6 @@ class TestRenderServiceIntegration:
         with patch("render.services.render_service.repository") as mock_repo, patch(
             "render.services.render_service.query_executor"
         ) as mock_qe, patch(
-            "render.services.render_service.template_renderer"
-        ) as mock_tr, patch(
             "render.services.render_service.renderer_registry"
         ) as mock_registry, patch(
             "render.services.render_service.AsyncSessionLocal"
@@ -305,7 +303,6 @@ class TestRenderServiceIntegration:
             mock_registry.get_generator.return_value = mock_generator
             
             mock_qe.execute_queries = AsyncMock(return_value={"query": []})
-            mock_tr.render.return_value = "<html>Test</html>"
             mock_storage = AsyncMock()
             mock_storage.save = AsyncMock(return_value="/path/to/pdf")
             service.storage = mock_storage

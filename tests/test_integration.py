@@ -7,7 +7,7 @@ import pytest
 
 from render.models import RenderStatus
 from render.services.repository import ReportRepository
-from render.services.template_renderer import TemplateRenderer
+from render.services.weasyprint_renderer import WeasyPrintRenderer
 
 
 class TestReportWorkflow:
@@ -94,8 +94,8 @@ ORDER BY tablename;
         assert len(report.query_files) == 1
 
         # Render template
-        renderer = TemplateRenderer()
-        html = renderer.render(report, sample_parameters, sample_query_results)
+        renderer = WeasyPrintRenderer()
+        html = renderer._render_html(report, sample_parameters, sample_query_results)
 
         # Verify rendered HTML
         assert "Integration Test Report" in html
@@ -125,8 +125,8 @@ ORDER BY tablename;
         repo = ReportRepository(str(temp_reports_dir))
         report = repo.get_report("filter-test")
 
-        renderer = TemplateRenderer()
-        html = renderer.render(
+        renderer = WeasyPrintRenderer()
+        html = renderer._render_html(
             report, {"date_value": datetime(2024, 1, 15)}, {"query": []}
         )
 
@@ -164,8 +164,8 @@ ORDER BY tablename;
         repo = ReportRepository(str(temp_reports_dir))
         report = repo.get_report("multi-query")
 
-        renderer = TemplateRenderer()
-        html = renderer.render(report, {}, sample_query_results)
+        renderer = WeasyPrintRenderer()
+        html = renderer._render_html(report, {}, sample_query_results)
 
         # Verify both queries rendered
         assert "users" in html

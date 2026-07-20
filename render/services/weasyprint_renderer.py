@@ -2,23 +2,18 @@
 
 import logging
 from io import BytesIO
-from pathlib import Path
 from typing import Any, Dict, List
 
 from weasyprint import HTML
 
-from .report_renderer import ReportRenderer
+from .report_renderer import ReportRenderer, JINJA_TEMPLATE_FILE
 from .repository import Report
-from .template_renderer import TemplateRenderer, template_renderer
 
 logger = logging.getLogger(__name__)
 
 
 class WeasyPrintRenderer(ReportRenderer):
-    """Generate PDF using WeasyPrint from HTML."""
-
-    def __init__(self, template_renderer: TemplateRenderer = template_renderer):
-        self.template_renderer = template_renderer
+    """Generate PDF using WeasyPrint from a Jinja2 HTML template."""
 
     @property
     def format_name(self) -> str:
@@ -28,18 +23,35 @@ class WeasyPrintRenderer(ReportRenderer):
     def file_extension(self) -> str:
         return "pdf"
 
+    @property
+    def supports_preview(self) -> bool:
+        return True
+
+    def _render_html(
+        self,
+        report: Report,
+        parameters: Dict[str, Any],
+        query_results: Dict[str, List[Dict[str, Any]]],
+    ) -> str:
+        """Build context, create Jinja2 env, render template to HTML string."""
+        context = self.build_context(report, parameters, query_results)
+        env = self.build_environment(report)
+        template = env.get_template(JINJA_TEMPLATE_FILE)
+        html = template.render(**context)
+        logger.info(
+            f"Template rendered for report: {report.id}, "
+            f"HTML length: {len(html)} chars"
+        )
+        return html
+
     async def render_preview(
         self,
         report: Report,
         parameters: Dict[str, Any],
         query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str | None:
-        """Отрендерить HTML-превью. Возвращает None, если формат не поддерживает превью."""
-        return self.template_renderer.render(report, parameters, query_results)
-
-    @property
-    def supports_preview(self) -> bool:
-        pass
+        """Return the rendered HTML that would be converted to PDF."""
+        return self._render_html(report, parameters, query_results)
 
     async def render(
         self,
@@ -48,32 +60,28 @@ class WeasyPrintRenderer(ReportRenderer):
         query_results: Dict[str, List[Dict[str, Any]]],
         base_url: str | None = None,
     ) -> bytes:
-        """
-        Takes Args and make PDF using WeasyPrint.
+        """Render the report to PDF bytes via WeasyPrint.
+
         Args:
-            report: Report object with template
-            parameters: User-provided parameters
-            query_results: Query results as DataFrames
-            base_url: Base URL for resolving relative paths
+            report: Report object with template and metadata.
+            parameters: User-provided parameter values.
+            query_results: Mapping of query name → list of row dicts.
+            base_url: Base URL for resolving relative asset paths.
+                      Defaults to the report directory as a ``file://`` URI.
+
         Returns:
-            PDF file content as bytes
+            PDF file content as bytes.
         """
-        source_content = await self.render_preview(report, parameters, query_results)
+        source_content = self._render_html(report, parameters, query_results)
 
         try:
             logger.info(f"Generating PDF from HTML (source: {report.path})")
 
-            # If base_url not provided, use report.path as base
             if base_url is None:
-                # Convert to absolute path first to avoid "relative paths can't be expressed as file URIs" error
-                absolute_path = report.path.resolve()
-                base_url = absolute_path.as_uri()
+                base_url = report.path.resolve().as_uri()
 
             pdf_file = BytesIO()
-            HTML(
-                string=source_content, 
-                base_url=base_url,
-            ).write_pdf(pdf_file)
+            HTML(string=source_content, base_url=base_url).write_pdf(pdf_file)
             pdf_bytes = pdf_file.getvalue()
 
             logger.info(f"PDF generated successfully, size: {len(pdf_bytes)} bytes")
@@ -84,5 +92,5 @@ class WeasyPrintRenderer(ReportRenderer):
             raise RuntimeError(f"PDF generation failed: {e}")
 
 
-# Global WeasyPrint generator instance
+# Global WeasyPrint renderer instance
 weasyprint_renderer = WeasyPrintRenderer()

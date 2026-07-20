@@ -26,7 +26,6 @@ from .interface import RenderService as RenderServiceInterface
 from .renderer_registry import renderer_registry
 from .query_executor import query_executor
 from .repository import repository
-from .template_renderer import template_renderer
 
 logger = logging.getLogger(__name__)
 
