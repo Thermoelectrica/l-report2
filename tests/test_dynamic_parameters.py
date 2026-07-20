@@ -9,6 +9,27 @@ from render.services.render_service import RenderServiceImpl
 from render.services.query_executor import QueryExecutor
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_executor() -> QueryExecutor:
+    """Return a QueryExecutor instance with a fake (non-None) pool."""
+    executor = QueryExecutor.__new__(QueryExecutor)
+    executor.pool = MagicMock()  # not None → passes the guard check
+    return executor
+
+
+def _make_metadata(*params: ReportParameter) -> ReportMetadata:
+    return ReportMetadata(
+        id="test", name="Test", format="weasyprint", parameters=list(params)
+    )
+
+
+def _param(name: str, ptype: ParameterType = ParameterType.STRING, **kw) -> ReportParameter:
+    return ReportParameter(name=name, type=ptype, **kw)
+
+
 @pytest.fixture
 def mock_query_executor():
     """Create a mock query executor."""
@@ -501,3 +522,166 @@ class TestGetReportMetadataWithDependencies:
             
             # Verify enum values were populated
             assert metadata.parameters[1].enum == ["table1", "table2"]
+
+
+# ---------------------------------------------------------------------------
+# Tests for duplicate named-parameter handling and type-cast generation
+# (regression for asyncpg.exceptions.AmbiguousParameterError)
+# ---------------------------------------------------------------------------
+
+class TestConvertNamedToPositionalDuplicates:
+    """
+    Verify that _convert_named_to_positional correctly handles queries where
+    the same named parameter appears more than once (e.g. in an IS NULL guard).
+
+    Before the fix, such queries produced a bare ``$1`` in contexts like
+    ``$1 IS NULL``, causing PostgreSQL to raise
+    ``AmbiguousParameterError: could not determine data type of parameter $1``.
+
+    After the fix every placeholder is emitted with an explicit type cast
+    (e.g. ``$1::text``), so PostgreSQL always knows the type.
+    """
+
+    def test_duplicate_param_produces_single_positional_slot(self):
+        """Same name used twice → only one entry in positional_params."""
+        executor = _make_executor()
+        metadata = _make_metadata(_param("plant_name"))
+
+        query = "SELECT * FROM t WHERE col = :plant_name OR :plant_name IS NULL"
+        converted, params = executor._convert_named_to_positional(
+            query, {"plant_name": "Acme"}, metadata
+        )
+
+        # Only one value in the positional list
+        assert params == ["Acme"]
+        # Both occurrences replaced with $1
+        assert "$1" in converted
+        assert ":plant_name" not in converted
+
+    def test_duplicate_param_gets_type_cast(self):
+        """Every $N placeholder must carry a type cast to avoid AmbiguousParameterError."""
+        executor = _make_executor()
+        metadata = _make_metadata(_param("plant_name", ParameterType.STRING))
+
+        query = "SELECT * FROM t WHERE col = :plant_name OR :plant_name IS NULL"
+        converted, _ = executor._convert_named_to_positional(
+            query, {"plant_name": "Acme"}, metadata
+        )
+
+        # Both occurrences must have the cast appended
+        import re
+        placeholders = re.findall(r"\$1[^\d]", converted + " ")  # avoid matching $10
+        assert all("::text" in p or converted.count("$1::text") == 2 for p in placeholders), (
+            f"Expected $1::text in both occurrences, got: {converted!r}"
+        )
+        assert converted.count("$1::text") == 2
+
+    def test_type_cast_for_integer_param(self):
+        """Integer parameters get ::integer cast."""
+        executor = _make_executor()
+        metadata = _make_metadata(_param("limit_val", ParameterType.INTEGER))
+
+        query = "SELECT * FROM t WHERE id < :limit_val OR :limit_val IS NULL"
+        converted, params = executor._convert_named_to_positional(
+            query, {"limit_val": 42}, metadata
+        )
+
+        assert params == [42]
+        assert converted.count("$1::integer") == 2
+
+    def test_type_cast_for_date_param(self):
+        """Date parameters get ::date cast."""
+        from datetime import date
+        executor = _make_executor()
+        metadata = _make_metadata(_param("start_date", ParameterType.DATE))
+
+        d = date(2024, 1, 1)
+        query = "SELECT * FROM t WHERE dt >= :start_date OR :start_date IS NULL"
+        converted, params = executor._convert_named_to_positional(
+            query, {"start_date": d}, metadata
+        )
+
+        assert params == [d]
+        assert converted.count("$1::date") == 2
+
+    def test_type_cast_for_boolean_param(self):
+        """Boolean parameters get ::boolean cast."""
+        executor = _make_executor()
+        metadata = _make_metadata(_param("is_active", ParameterType.BOOLEAN))
+
+        query = "SELECT * FROM t WHERE active = :is_active OR :is_active IS NULL"
+        converted, params = executor._convert_named_to_positional(
+            query, {"is_active": True}, metadata
+        )
+
+        assert params == [True]
+        assert converted.count("$1::boolean") == 2
+
+    def test_type_cast_for_float_param(self):
+        """Float parameters get ::double precision cast."""
+        executor = _make_executor()
+        metadata = _make_metadata(_param("price", ParameterType.FLOAT))
+
+        query = "SELECT * FROM t WHERE price > :price OR :price IS NULL"
+        converted, params = executor._convert_named_to_positional(
+            query, {"price": 9.99}, metadata
+        )
+
+        assert params == [9.99]
+        assert "$1::double precision" in converted
+
+    def test_type_cast_unknown_param_falls_back_to_text(self):
+        """Parameter not in metadata gets ::text cast as safe fallback."""
+        executor = _make_executor()
+        # metadata has no parameters defined
+        metadata = _make_metadata()
+
+        query = "SELECT * FROM t WHERE col = :mystery OR :mystery IS NULL"
+        # mystery is not required (not in metadata), value provided explicitly
+        converted, params = executor._convert_named_to_positional(
+            query, {"mystery": "hello"}, metadata
+        )
+
+        assert params == ["hello"]
+        assert converted.count("$1::text") == 2
+
+    def test_multiple_distinct_params_each_get_cast(self):
+        """Multiple distinct parameters each get their own cast."""
+        executor = _make_executor()
+        metadata = _make_metadata(
+            _param("schema_name", ParameterType.STRING),
+            _param("table_name", ParameterType.STRING),
+        )
+
+        query = (
+            "SELECT * FROM t "
+            "WHERE schema = :schema_name AND tbl = :table_name "
+            "OR :schema_name IS NULL OR :table_name IS NULL"
+        )
+        converted, params = executor._convert_named_to_positional(
+            query,
+            {"schema_name": "public", "table_name": "users"},
+            metadata,
+        )
+
+        assert params == ["public", "users"]
+        assert converted.count("$1::text") == 2  # schema_name appears twice
+        assert converted.count("$2::text") == 2  # table_name appears twice
+
+    def test_existing_pg_type_cast_in_query_not_double_cast(self):
+        """
+        If the SQL already contains a ::cast on the named param (e.g. :val::text),
+        the replacement must not produce $1::text::text.
+        """
+        executor = _make_executor()
+        metadata = _make_metadata(_param("val", ParameterType.STRING))
+
+        # User wrote an explicit cast in the SQL
+        query = "SELECT :val::text AS v"
+        converted, params = executor._convert_named_to_positional(
+            query, {"val": "hello"}, metadata
+        )
+
+        assert params == ["hello"]
+        # Should not contain double cast
+        assert "::text::text" not in converted

@@ -48,6 +48,13 @@ else
     echo -e "${GREEN}✓ Service user $SERVICE_USER exists${NC}"
 fi
 
+# Stop service if already running (safe no-op if not installed yet)
+if systemctl is-active --quiet "$APP_NAME" 2>/dev/null; then
+    echo -e "${YELLOW}Stopping running $APP_NAME service...${NC}"
+    systemctl stop "$APP_NAME"
+    echo -e "${GREEN}✓ Service stopped${NC}"
+fi
+
 # Create installation directory
 echo -e "${YELLOW}Creating installation directory...${NC}"
 mkdir -p "$INSTALL_DIR"
@@ -57,19 +64,21 @@ echo -e "${GREEN}✓ Directory created: $INSTALL_DIR${NC}"
 echo -e "${YELLOW}Copying application files...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Copy all necessary files and directories
-cp -r "$SCRIPT_DIR/report2" "$INSTALL_DIR/"
-cp -r "$SCRIPT_DIR/render" "$INSTALL_DIR/"
-cp -r "$SCRIPT_DIR/sample_reports" "$INSTALL_DIR/"
-cp -r "$SCRIPT_DIR/alembic" "$INSTALL_DIR/"
+# Sync code directories (--delete removes stale files from old releases)
+rsync -a --delete "$SCRIPT_DIR/report2/"       "$INSTALL_DIR/report2/"
+rsync -a --delete "$SCRIPT_DIR/render/"        "$INSTALL_DIR/render/"
+rsync -a --delete "$SCRIPT_DIR/sample_reports/" "$INSTALL_DIR/sample_reports/"
+rsync -a --delete "$SCRIPT_DIR/alembic/"       "$INSTALL_DIR/alembic/"
 cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/rxconfig.py" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/alembic.ini" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/pytest.ini" "$INSTALL_DIR/" 2>/dev/null || true
 
-# Copy .env file if it exists, otherwise copy .env.example
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    echo -e "${YELLOW}Copying existing .env file...${NC}"
+# Copy .env file only if one does not already exist in INSTALL_DIR
+if [ -f "$INSTALL_DIR/.env" ]; then
+    echo -e "${GREEN}✓ Existing $INSTALL_DIR/.env kept (not overwritten)${NC}"
+elif [ -f "$SCRIPT_DIR/.env" ]; then
+    echo -e "${YELLOW}Copying .env file...${NC}"
     cp "$SCRIPT_DIR/.env" "$INSTALL_DIR/"
     echo -e "${GREEN}✓ .env file copied${NC}"
 elif [ -f "$SCRIPT_DIR/.env.example" ]; then
@@ -148,6 +157,8 @@ fi
 
 cp "$SCRIPT_DIR/$SERVICE_FILE" "/etc/systemd/system/"
 systemctl daemon-reload
+# Re-enable the service in case the unit file changed
+systemctl enable "$APP_NAME" 2>/dev/null || true
 echo -e "${GREEN}✓ Systemd service installed${NC}"
 
 # Run database migrations
@@ -167,15 +178,21 @@ sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/reflex" init || {
 }
 echo -e "${GREEN}✓ Reflex initialization attempt complete${NC}"
 
+# Start (or restart) the service if it was already enabled
+if systemctl is-enabled --quiet "$APP_NAME" 2>/dev/null; then
+    echo -e "${YELLOW}Starting $APP_NAME service...${NC}"
+    systemctl start "$APP_NAME"
+    echo -e "${GREEN}✓ Service started${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}=== Installation Complete ===${NC}"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Edit configuration: nano $INSTALL_DIR/.env"
-echo "2. Enable service: systemctl enable $APP_NAME"
-echo "3. Start service: systemctl start $APP_NAME"
-echo "4. Check status: systemctl status $APP_NAME"
-echo "5. View logs: journalctl -u $APP_NAME -f"
+echo "2. Enable & start service: systemctl enable --now $APP_NAME"
+echo "3. Check status: systemctl status $APP_NAME"
+echo "4. View logs: journalctl -u $APP_NAME -f"
 echo ""
 echo -e "${YELLOW}Service management commands:${NC}"
 echo "  Start:   systemctl start $APP_NAME"
