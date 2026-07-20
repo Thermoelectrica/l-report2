@@ -169,14 +169,19 @@ sudo -u "$SERVICE_USER" "$VENV_DIR/bin/alembic" upgrade head || {
 }
 echo -e "${GREEN}✓ Database migrations completed${NC}"
 
-# Initialize Reflex
-echo -e "${YELLOW}Initializing Reflex...${NC}"
-cd "$INSTALL_DIR"
-sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/reflex" init || {
-    echo -e "${YELLOW}⚠ Reflex initialization warning (this is normal for first-time setup)${NC}"
-    echo -e "${YELLOW}  Reflex will initialize on first run${NC}"
+# Build Reflex frontend (export static assets)
+echo -e "${YELLOW}Building Reflex frontend (this may take a while)...${NC}"
+cd "$SCRIPT_DIR"
+"$VENV_DIR/bin/reflex" export --frontend-only --no-zip || {
+    echo -e "${RED}Error: Reflex frontend build failed${NC}"
+    exit 1
 }
-echo -e "${GREEN}✓ Reflex initialization attempt complete${NC}"
+echo -e "${GREEN}✓ Reflex frontend built${NC}"
+
+# Copy built frontend assets to install directory
+echo -e "${YELLOW}Copying frontend assets...${NC}"
+rsync -a --delete "$SCRIPT_DIR/.web/" "$INSTALL_DIR/.web/"
+echo -e "${GREEN}✓ Frontend assets copied${NC}"
 
 # Start (or restart) the service if it was already enabled
 if systemctl is-enabled --quiet "$APP_NAME" 2>/dev/null; then

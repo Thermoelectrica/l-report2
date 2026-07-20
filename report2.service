@@ -10,7 +10,7 @@ WorkingDirectory=/opt/report2
 Environment=HOME=/var/www
 Environment="PATH=/opt/report2/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=/opt/report2/.env
-ExecStart=/opt/report2/.venv/bin/reflex run --env prod
+ExecStart=/opt/report2/.venv/bin/reflex run --env prod --backend-only
 Restart=always
 RestartSec=10
 StandardOutput=journal
