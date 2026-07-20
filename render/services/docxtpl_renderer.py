@@ -38,8 +38,6 @@ class DocxTplRenderer(ReportRenderer):
 
     def __init__(self):
         self.resized_images_store = Path("./resized_images_store")
-        self.blank_image = "blank_image"
-        self.prefix_name = {0: "visual", 1: "thermal"}
 
     @property
     def format_name(self) -> str:
@@ -73,11 +71,18 @@ class DocxTplRenderer(ReportRenderer):
             except OSError as e:
                 logger.warning(f"Failed to remove file {file_name}: {e}")
 
+    # Blank placeholder filenames, one per image slot type
+    BLANK_VISUAL = "blank_image_visual.jpg"
+    BLANK_THERMAL = "blank_image_thermal.jpg"
+
     def create_blank_image(self, folder: Path) -> None:
         """Create two blank placeholder images in *folder*."""
-        for idx, size in enumerate([(511, 680), (511, 380)]):
+        for filename, size in [
+            (self.BLANK_VISUAL, (511, 680)),
+            (self.BLANK_THERMAL, (511, 380)),
+        ]:
             image = Image.new("RGB", size, (255, 255, 255))
-            dest = f"{folder}/{self.blank_image}_{self.prefix_name[idx]}.jpg"
+            dest = folder / filename
             image.save(dest)
             logger.info(f"Created blank image: {dest}")
 
@@ -191,16 +196,50 @@ class DocxTplRenderer(ReportRenderer):
                     "Failed to download images:\n" + "\n".join(str(e) for e in errors)
                 )
 
-    def _find_image_exif(self, image_name: str) -> str:
-        """Return EXIF ImageDescription tag (270) value for *image_name*."""
-        file_path = str(Path(self.resized_images_store) / image_name)
-        if os.path.isfile(file_path):
-            try:
-                with Image.open(file_path) as img:
-                    return img.getexif().get(270, "")
-            except Exception as e:
-                logger.warning(f"Failed to read EXIF for {file_path}: {e}")
-        return ""
+    def _make_inline_image(
+        self,
+        doc: DocxTemplate,
+        image_id: str | None,
+        width_mm: int = 67,
+        blank: str | None = None,
+    ) -> "InlineImage":
+        """Return an ``InlineImage`` for *image_id*, falling back to a blank placeholder.
+
+        This method is exposed as the ``inline_image`` Jinja2 filter so that
+        DOCX templates can convert raw image-ID strings to renderable objects
+        without any renderer-side knowledge of the report's data model.
+
+        Usage in a ``.docx`` Jinja2 template::
+
+            {{ row.visual_image_id | inline_image }}
+            {{ row.thermal_image_id | inline_image(blank='thermal') }}
+
+        Args:
+            doc: The active ``DocxTemplate`` instance (captured in the closure
+                 when the filter is registered).
+            image_id: Filename of the pre-fetched image in
+                      ``resized_images_store``, or ``None`` / empty string.
+            width_mm: Rendered width in millimetres (default 67).
+            blank: Which blank placeholder to use when *image_id* is missing or
+                   the file does not exist.  ``"thermal"`` → thermal-sized blank;
+                   anything else → visual-sized blank (default).
+
+        Returns:
+            A ``docxtpl.InlineImage`` ready to be embedded by docxtpl.
+        """
+        if image_id:
+            path = self.resized_images_store / image_id
+            if path.exists():
+                return InlineImage(doc, image_descriptor=str(path), width=Mm(width_mm))
+
+        placeholder = (
+            self.BLANK_THERMAL if blank == "thermal" else self.BLANK_VISUAL
+        )
+        return InlineImage(
+            doc,
+            image_descriptor=str(self.resized_images_store / placeholder),
+            width=Mm(width_mm),
+        )
 
     # ── Core rendering ───────────────────────────────────────────────────────
 
@@ -218,7 +257,11 @@ class DocxTplRenderer(ReportRenderer):
 
         The context is expected to be fully prepared (including any
         report-specific transformations) before this method is called.
-        docxtpl-specific objects (``InlineImage``) are injected here.
+
+        Image IDs in the template are resolved to ``InlineImage`` objects via
+        the ``inline_image`` Jinja2 filter registered here.  The template is
+        responsible for calling the filter on the appropriate columns — the
+        renderer does not inspect the context structure at all.
 
         Args:
             report: Report object (used to locate the DOCX template and logo).
@@ -238,32 +281,17 @@ class DocxTplRenderer(ReportRenderer):
                     doc, image_descriptor=str(logo_file), width=Mm(40)
                 )
 
-            # Inject InlineImage objects for rows that carry image IDs
-            data_key = context.get("_data_key", "data")
-            rows = context.get("queries", {}).get(data_key, [])
-            for row in rows:
-                image_keys = [k for k in row.keys() if "image_id" in k]
-                pictures = []
-                for idx, image_key in enumerate(image_keys):
-                    image_obj = row.get(image_key)
-                    image_descriptor = (
-                        f"{self.resized_images_store}/"
-                        f"{self.blank_image}_{self.prefix_name[idx]}.jpg"
-                    )
-                    if isinstance(image_obj, list):
-                        for img in image_obj:
-                            if self._find_image_exif(img) == self.prefix_name[idx]:
-                                image_descriptor = f"{self.resized_images_store}/{img}"
-                                break
-                    elif isinstance(image_obj, str):
-                        if self._find_image_exif(image_obj) == self.prefix_name[idx]:
-                            image_descriptor = f"{self.resized_images_store}/{image_obj}"
-                    pictures.append(
-                        InlineImage(doc, image_descriptor=image_descriptor, width=Mm(67))
-                    )
-                row["pictures"] = pictures
+            # Register the inline_image filter, capturing `doc` in the closure.
+            # Templates use it as:  {{ row.visual_image_id | inline_image }}
+            # or with options:      {{ row.thermal_image_id | inline_image(blank='thermal') }}
+            def _inline_image_filter(
+                image_id: str | None,
+                width_mm: int = 67,
+                blank: str | None = None,
+            ) -> "InlineImage":
+                return self._make_inline_image(doc, image_id, width_mm, blank)
 
-            jinja_env = self.build_environment(report)
+            jinja_env = self.build_environment(report, inline_image=_inline_image_filter)
             doc.render(context, jinja_env)
 
             file_stream = io.BytesIO()
