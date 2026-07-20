@@ -22,7 +22,7 @@ from .s3_image_service import s3_image_service
 logger = logging.getLogger(__name__)
 locale.setlocale(
     category=locale.LC_ALL,
-    locale="Russian"
+    locale="ru_RU.UTF-8"
 )
 
 
