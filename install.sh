@@ -183,6 +183,14 @@ echo -e "${YELLOW}Copying frontend assets...${NC}"
 rsync -a --delete "$SCRIPT_DIR/.web/" "$INSTALL_DIR/.web/"
 echo -e "${GREEN}✓ Frontend assets copied${NC}"
 
+# Fix ownership and permissions on .web after build+copy (build runs as root)
+echo -e "${YELLOW}Setting ownership and permissions on frontend assets...${NC}"
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/.web"
+# Directories: rwxr-xr-x (755), files: rw-r--r-- (644)
+# .web/backend/ needs to be writable by www-data at runtime (e.g. upload_is_used sentinel)
+chmod -R u+rwX,go+rX "$INSTALL_DIR/.web"
+echo -e "${GREEN}✓ Frontend asset ownership set to $SERVICE_USER:$SERVICE_GROUP${NC}"
+
 # Start (or restart) the service if it was already enabled
 if systemctl is-enabled --quiet "$APP_NAME" 2>/dev/null; then
     echo -e "${YELLOW}Starting $APP_NAME service...${NC}"
