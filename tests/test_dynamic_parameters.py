@@ -1,7 +1,6 @@
 """Tests for dynamic parameter and enum query dependency features."""
 
 import pytest
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from render.models import ParameterType, ReportMetadata, ReportParameter

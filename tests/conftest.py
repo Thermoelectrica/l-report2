@@ -13,7 +13,6 @@ from render.database.models import Base, Render
 from render.models import (
     ParameterType,
     RenderStatus,
-    ReportListItem,
     ReportMetadata,
     ReportParameter,
 )

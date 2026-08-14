@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import AsyncSessionLocal
 from models.database import Render
 from models.schemas import RenderStatus
+from render import storage
 from .pdf_generator import pdf_generator
 from .query_executor import query_executor
 from .repository import repository

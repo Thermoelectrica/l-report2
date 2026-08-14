@@ -1,9 +1,8 @@
 """Status page state management."""
 
-import os
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import reflex as rx
 

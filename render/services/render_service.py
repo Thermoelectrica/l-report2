@@ -1,6 +1,5 @@
 """Main render service implementation."""
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -19,14 +18,12 @@ from ..models import (
     RenderStatus,
     ReportListItem,
     ReportMetadata,
-    ReportParameter,
 )
 from ..storage import get_storage
 from .interface import RenderService as RenderServiceInterface
 from .renderer_registry import renderer_registry
 from .query_executor import query_executor
 from .repository import repository
-from .template_renderer import template_renderer
 
 logger = logging.getLogger(__name__)
 

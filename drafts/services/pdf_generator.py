@@ -3,7 +3,7 @@
 import logging
 from io import BytesIO
 
-from weasyprint import CSS, HTML
+from weasyprint import HTML
 
 logger = logging.getLogger(__name__)
 

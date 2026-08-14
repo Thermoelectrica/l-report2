@@ -69,7 +69,7 @@ class TestFilesystemStorage:
         storage_path = temp_dir / "new_storage"
         assert not storage_path.exists()
 
-        storage = FilesystemStorage(str(storage_path))
+        storage = FilesystemStorage(str(storage_path)) # noqa
 
         assert storage_path.exists()
         assert storage_path.is_dir()
