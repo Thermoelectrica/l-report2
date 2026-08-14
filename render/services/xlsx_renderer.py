@@ -95,13 +95,9 @@ class XlsxRenderer(ReportRenderer):
         for path, name in [(xlsx_file, self.file_xlsx), (json_file, self.plant_reference)]:
             if not path.exists():
                 raise ValueError(f"Отсутствует {name} в {report.path}")
-        
-        print(f"REPORT: {report}, PARAMS: {params}") # development
 
         if not self.query_results.get("data"):
                 raise ValueError(f"По {params['plant_name']} нет данных для формирования документа")
-
-        print(f"DATA: {self.query_results.get('data')}") # development
         
         try:
             # Открываем шаблон
