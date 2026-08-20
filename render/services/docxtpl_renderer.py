@@ -72,10 +72,7 @@ class DocxTplRenderer(ReportRenderer):
                 row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and t_sticker_min >= 95 or
                 row["is_test_ready"] and t_anomaly >= 15
             ):
-                group_label = (
-                    "Превышение установленного абсолютного значения "
-                    "наибольшей допустимой температуры. Высокий риск отказа электродвигателя."
-                )
+                group_label = "Дефекты электродвигателей с высоким риском отказа."
                 defect_weight = 4
             elif (
                 row["defect_type_short_name"] == "Качение" and 80 <= t_sticker_min < 110 or
@@ -89,8 +86,8 @@ class DocxTplRenderer(ReportRenderer):
                 0 < t_anomaly < 15
             ):
                 group_label = (
-                    "Превышение установленного абсолютного значения "
-                    "наибольшей допустимой температуры."
+                    "Дефекты электродвигателей с превышением наибольшей "
+                    "допустимой температуры."
                 )
                 defect_weight = 5
         
