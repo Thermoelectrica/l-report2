@@ -64,6 +64,7 @@ Thumbs.db
 # Temporary lock files
 .~lock*
 ~lock*
+reflex.lock
 
 uploaded_files
 resized_images_store
