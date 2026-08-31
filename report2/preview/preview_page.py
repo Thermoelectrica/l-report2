@@ -88,29 +88,32 @@ def preview_page() -> rx.Component:
                                     rx.cond(
                                         PreviewState.parameters_dict,
                                         rx.vstack(
-                                            rx.foreach(
-                                                PreviewState.parameters_dict.items(),
-                                                lambda item: rx.box(
-                                                    rx.vstack(
-                                                        rx.text(
-                                                            item[0],
-                                                            size="2",
-                                                            weight="bold",
-                                                            color="gray",
-                                                        ),
-                                                        rx.text(
-                                                            item[1],
-                                                            size="2",
-                                                        ),
-                                                        spacing="1",
-                                                        align_items="start",
+                                    rx.foreach(
+                                        PreviewState.parameters_dict.items(),
+                                        lambda item: rx.fragment(
+                                            rx.box(
+                                                rx.vstack(
+                                                    rx.text(
+                                                        item[0],
+                                                        size="2",
+                                                        weight="bold",
+                                                        color="gray",
                                                     ),
-                                                    padding="8px",
-                                                    border_radius="6px",
-                                                    background="var(--gray-2)",
-                                                    width="100%",
+                                                    rx.text(
+                                                        item[1],
+                                                        size="2",
+                                                    ),
+                                                    spacing="1",
+                                                    align_items="start",
                                                 ),
+                                                padding="8px",
+                                                border_radius="6px",
+                                                background="var(--gray-2)",
+                                                width="100%",
                                             ),
+                                            key=item[0],
+                                        ),
+                                    ),
                                             spacing="2",
                                             width="100%",
                                         ),
