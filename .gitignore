@@ -41,6 +41,7 @@ htmlcov/
 *.swp
 *.swo
 *~
+.gigacode_vsc/
 
 # Environment
 .env

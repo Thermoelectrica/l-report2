@@ -76,16 +76,30 @@ class XlsxRenderer(ReportRenderer):
             json_file: Path | str = Path("/"),
     ) -> tuple[str, Any, list[dict]]:
         # Загрузка справочника станций
-        with open(json_file, "r", encoding="utf-8") as file:
-            PLANT = json.load(file)
-        for item in PLANT:
-            if item["plant_name"] == plant:
-                return (
-                    item[control_type][f"{control_type}_name"],
-                    getattr(XlsxRenderer, item[control_type][f"{control_type}_result"])(data),
-                    item["signatories"],
-                )
-        raise ValueError(f"{plant} отсутствует в справочниках")
+        try:
+            with open(json_file, "r", encoding="utf-8") as file:
+                PLANT = json.load(file)
+
+            plant_map = {p["plant_name"]: p for p in PLANT}
+            item = plant_map.get(plant) or plant_map["Default"]
+
+            return (
+                item[control_type][f"{control_type}_name"],
+                getattr(XlsxRenderer, item[control_type][f"{control_type}_result"])(data),
+                item["signatories"],
+            )
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Ошибка парсинга JSON ({json_file}): {exc}")
+        except KeyError as exc:
+            raise ValueError(
+                f"Некорректная структура справочника ({json_file}): "
+                f"отсутствует ключ {exc}. "
+                f"Станция '{plant}' не найдена, 'Default' отсутствует."
+            )
+        except AttributeError as exc:
+            raise ValueError(
+                f"Метод результата не найден в XlsxRenderer: {exc}"
+            )
         
     def render_xlsx(self, report: Report, params: Dict[str, Any]) -> bytes:
         # Проверяем наличие файлов XLSX и JSON 
@@ -194,7 +208,18 @@ class XlsxRenderer(ReportRenderer):
             signatories = []
 
             # Формируем таблицу
+            skip_counter = 0
             for row_idx, row_data in enumerate(self.query_results["data"], start=start_row):
+                if (
+                    params["service_type"] == "Монтаж"
+                    and (
+                        row_data["sticker_installed"] == 0
+                        or row_data["sticker_installed"] is None
+                    )
+                ):
+                    skip_counter += 1
+                    continue
+                row_idx -= skip_counter
                 # Заполняем строку: индекс row_idx соответствует next row
                 sheet.row_dimensions[row_idx].height = 60
                 for col_idx in range(1, 6):
@@ -212,8 +237,7 @@ class XlsxRenderer(ReportRenderer):
                     
                     if col_idx == 4:
                         data = (
-                            (row_data["sticker_count"] or "0")
-                            if params["service_type"] == "Монтаж"
+                            row_data["sticker_installed"] if params["service_type"] == "Монтаж"
                             else params["protocol_number"]
                         ) 
                         service, result, signatories = self.get_plant_content(
