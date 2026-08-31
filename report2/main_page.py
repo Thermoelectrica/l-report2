@@ -188,7 +188,10 @@ def report_details_panel() -> rx.Component:
                         rx.vstack(
                             rx.foreach(
                                 State.report_parameters,
-                                parameter_input,
+                                lambda p: rx.fragment(
+                                    parameter_input(p),
+                                    key=p.name,
+                                ),
                             ),
                             spacing="4",
                             width="100%",

@@ -33,7 +33,10 @@ def config_section(section: list) -> rx.Component:
             rx.divider(),
             rx.foreach(
                 section[1],
-                config_item,
+                lambda item: rx.fragment(
+                    config_item(item),
+                    key=item[0],
+                ),
             ),
             spacing="2",
             align_items="start",
