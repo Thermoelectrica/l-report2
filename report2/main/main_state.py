@@ -78,6 +78,7 @@ class State(AuthState):
                     type=p.type.value,
                     required=p.required,
                     description=p.description or p.name,
+                    placeholder=p.placeholder or "",
                     enum_values=p.enum or [],
                     value=str(p.default) if p.default is not None else "",  # Initialize value with default
                 )

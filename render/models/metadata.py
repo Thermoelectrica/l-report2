@@ -57,6 +57,9 @@ class ReportParameter(BaseModel):
     description: Optional[str] = Field(
         default=None, description="Human-readable parameter description"
     )
+    placeholder: Optional[str] = Field(
+        default=None, description="Pattern of enter"
+    )
     enum: Optional[List[Any]] = Field(
         default=None, description="List of allowed values (for constrained inputs)"
     )

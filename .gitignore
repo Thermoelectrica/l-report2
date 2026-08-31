@@ -41,6 +41,7 @@ htmlcov/
 *.swp
 *.swo
 *~
+.gigacode_vsc/
 
 # Environment
 .env
@@ -64,6 +65,7 @@ Thumbs.db
 # Temporary lock files
 .~lock*
 ~lock*
+reflex.lock
 
 uploaded_files
 resized_images_store

@@ -2,7 +2,6 @@
 
 import logging
 from io import BytesIO
-from pathlib import Path
 from typing import Any, Dict, List
 
 from weasyprint import HTML

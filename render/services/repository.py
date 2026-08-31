@@ -88,6 +88,7 @@ class ReportRepository:
                     type=ParameterType(param["type"]),
                     required=param.get("required", False),
                     description=param.get("description"),
+                    placeholder=param.get("placeholder"),
                     enum=param.get("enum"),
                     enum_query=param.get("enum_query"),
                     default=param.get("default"),

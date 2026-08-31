@@ -1,7 +1,6 @@
 # test_template_renderer.py
 from jinja2 import Environment
 import pytest
-from pathlib import Path
 from unittest.mock import Mock
 from render.services.template_renderer import TemplateRenderer, Report
 

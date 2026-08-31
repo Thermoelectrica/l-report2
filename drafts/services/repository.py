@@ -88,6 +88,7 @@ class ReportRepository:
             id=report_dir.name,
             name=metadata_dict.get("name", report_dir.name),
             description=metadata_dict.get("description"),
+            placeholder=metadata_dict.get("placeholder"),
             version=metadata_dict.get("version", "1.0"),
             timeout=metadata_dict.get("timeout"),
             parameters=parameters,

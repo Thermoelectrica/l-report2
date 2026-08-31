@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict
 
 import reflex as rx
 
@@ -130,14 +130,18 @@ def parameter_input(param: ParamInfo) -> rx.Component:
                 param.enum_values,
                 name=param.name,
                 value=param.value,
-                placeholder=f"Select {param.name}",
+                placeholder=rx.cond(
+                    param.placeholder,
+                    f"{param.placeholder}",
+                    f"Select {param.name}"
+                ),
                 on_change=lambda v: State.handle_input_changed(param.name, v)
             ),
             # Plain text box
             rx.input(
                 name=param.name,
                 value=param.value,
-                placeholder=f"Enter {param.name}",
+                placeholder=f"{param.placeholder}",
                 type="text",
                 width="48%",
                 required=param.required,

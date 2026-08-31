@@ -5,7 +5,7 @@ import httpx
 from typing import Optional
 import logging
 
-from report2.auth.jwt_utils import verify_jwt_token, decode_jwt_token
+from report2.auth.jwt_utils import decode_jwt_token
 
 logger = logging.getLogger(__name__)
 

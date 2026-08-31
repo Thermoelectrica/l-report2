@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pandas as pd
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 from .repository import Report
 from .s3_image_service import s3_image_service

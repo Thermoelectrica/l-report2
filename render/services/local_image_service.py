@@ -2,7 +2,6 @@
 
 import base64
 import logging
-import mimetypes
 from pathlib import Path
 from typing import Optional
 

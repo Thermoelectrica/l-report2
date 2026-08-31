@@ -3,9 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 
-from render.models import RenderStatus
 from render.services.repository import ReportRepository
 from render.services.template_renderer import TemplateRenderer
 
