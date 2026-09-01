@@ -164,6 +164,10 @@ echo -e "${GREEN}✓ Systemd service installed${NC}"
 # Run database migrations
 echo -e "${YELLOW}Running database migrations...${NC}"
 cd "$INSTALL_DIR"
+
+# Ensure alembic_version table exists before upgrade
+sudo -u "$SERVICE_USER" "$VENV_DIR/bin/alembic" stamp head 2>/dev/null || true
+
 sudo -u "$SERVICE_USER" "$VENV_DIR/bin/alembic" upgrade head || {
     echo -e "${YELLOW}⚠ Database migration failed. You may need to configure the database first.${NC}"
 }

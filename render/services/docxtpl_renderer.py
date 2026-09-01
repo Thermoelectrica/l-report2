@@ -373,6 +373,9 @@ class DocxTplRenderer(ReportRenderer):
         """
         self.query_results = query_results
 
+        if not self.query_results.get("data"):
+            raise ValueError(f"По {parameters['plant_name']} нет данных для формирования документа")
+
         try:
             logger.info(f"Generating DOCX from raw data (source: {report.path})")
 
