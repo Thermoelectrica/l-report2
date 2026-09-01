@@ -17,8 +17,8 @@ from render.config import settings
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set the database URL from settings
-config.set_main_option("sqlalchemy.url", settings.meta_db_url_sync)
+# Set the database URL from settings (async for async_engine_from_config)
+config.set_main_option("sqlalchemy.url", settings.get_meta_db_url_with_password())
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
