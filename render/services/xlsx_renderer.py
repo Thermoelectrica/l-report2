@@ -1,6 +1,7 @@
 """Xlsx generator for xlsx output."""
 
 import asyncio
+import copy
 from datetime import datetime
 import json
 import logging
@@ -130,6 +131,19 @@ class XlsxRenderer(ReportRenderer):
         )
         if params["service_type"] in self.service_type.keys() and not item_count:
             raise ValueError(f"По {params['plant_name']} нет данных для формирования документа по услуге {params['service_type']}")
+
+        # Разделяем записи с монтажом и осмотром
+        montage_list = []
+        for row in self.query_results["data"]:
+            if row["montage"]:
+                new_montage = copy.deepcopy(row)
+                row["montage"] = 0
+                if row["inspection"]:
+                    new_montage["inspection"] = 0
+                montage_list.append(new_montage)
+
+        if montage_list:
+            self.query_results["data"].extend(montage_list)
 
         try:
             with open(json_file, "r", encoding="utf-8") as file:
