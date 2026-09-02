@@ -70,30 +70,40 @@ class XlsxRenderer(ReportRenderer):
     
     def get_plant_content(
             self, 
-            plant: str, 
-            control_type: str | None = None, 
-            data: str | None = None,
-            json_file: Path | str = Path("/"),
+            params: dict[str, Any],
+            control_type: str, 
+            raw_data: dict[str, Any] | None = None,
+            plant_data: list[dict] | None = None,
     ) -> tuple[str, Any, list[dict]]:
         # Загрузка справочника станций
+        plant = params["plant_name"]
         try:
-            with open(json_file, "r", encoding="utf-8") as file:
-                PLANT = json.load(file)
-
-            plant_map = {p["plant_name"]: p for p in PLANT}
+            plant_map = {p["plant_name"]: p for p in plant_data}
             item = plant_map.get(plant) or plant_map["Default"]
 
+            data_service = params["protocol_number"]
+
+            service, result = "", ""
+            if control_type in self.service_type.values():
+                if control_type == "montage":
+                    data_service = raw_data["montage"]
+                service = item[control_type][f"{control_type}_name"]
+                result = getattr(XlsxRenderer, item[control_type][f"{control_type}_result"])(data_service)
+            else:
+                for key in self.service_type.values():
+                    if raw_data[key]:
+                        service += item[key][f"{key}_name"]
+                        result += getattr(XlsxRenderer, item[key][f"{key}_result"])(
+                            raw_data[key] if key == "montage" 
+                            else data_service
+                            )
             return (
-                item[control_type][f"{control_type}_name"],
-                getattr(XlsxRenderer, item[control_type][f"{control_type}_result"])(data),
+                service,
+                result,
                 item["signatories"],
             )
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Ошибка парсинга JSON ({json_file}): {exc}")
-        except KeyError as exc:
+        except KeyError:
             raise ValueError(
-                f"Некорректная структура справочника ({json_file}): "
-                f"отсутствует ключ {exc}. "
                 f"Станция '{plant}' не найдена, 'Default' отсутствует."
             )
         except AttributeError as exc:
@@ -109,9 +119,23 @@ class XlsxRenderer(ReportRenderer):
         for path, name in [(xlsx_file, self.file_xlsx), (json_file, self.plant_reference)]:
             if not path.exists():
                 raise ValueError(f"Отсутствует {name} в {report.path}")
-
+        
         if not self.query_results.get("data"):
-                raise ValueError(f"По {params['plant_name']} нет данных для формирования документа")
+            raise ValueError(f"По {params['plant_name']} нет данных для формирования документа")
+
+        # Отчет не формируем, если по выбранной услуге нет данных
+        item_count = sum(
+            1 for row in self.query_results["data"] 
+            if row.get(self.service_type.get(params["service_type"]))
+        )
+        if params["service_type"] in self.service_type.keys() and not item_count:
+            raise ValueError(f"По {params['plant_name']} нет данных для формирования документа по услуге {params['service_type']}")
+
+        try:
+            with open(json_file, "r", encoding="utf-8") as file:
+                PLANT_REFERENCE = json.load(file)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Ошибка парсинга JSON ({json_file}): {exc}")
         
         try:
             # Открываем шаблон
@@ -213,15 +237,17 @@ class XlsxRenderer(ReportRenderer):
                 if (
                     params["service_type"] == "Монтаж"
                     and (
-                        row_data["sticker_installed"] == 0
-                        or row_data["sticker_installed"] is None
-                    )
+                        row_data["montage"] == 0
+                        or row_data["montage"] is None
+                    ) or not (row_data["montage"] or row_data["inspection"])
                 ):
                     skip_counter += 1
                     continue
+
                 row_idx -= skip_counter
+
                 # Заполняем строку: индекс row_idx соответствует next row
-                sheet.row_dimensions[row_idx].height = 60
+                sheet.row_dimensions[row_idx].height = None
                 for col_idx in range(1, 6):
                     # установка значений
                     if col_idx == 1:
@@ -236,17 +262,14 @@ class XlsxRenderer(ReportRenderer):
                         )
                     
                     if col_idx == 4:
-                        data = (
-                            row_data["sticker_installed"] if params["service_type"] == "Монтаж"
-                            else params["protocol_number"]
-                        ) 
                         service, result, signatories = self.get_plant_content(
-                            params["plant_name"], 
-                            self.service_type[params["service_type"]],
-                            data,
-                            json_file,
+                            params, 
+                            self.service_type.get(params["service_type"]),
+                            row_data,
+                            PLANT_REFERENCE,
                         )
                         cell_obj = sheet.cell(row=row_idx, column=col_idx, value=service)
+
                     if col_idx == 5:
                         cell_obj = sheet.cell(row=row_idx, column=col_idx, value=result)
                     

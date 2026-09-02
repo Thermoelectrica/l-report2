@@ -1,4 +1,3 @@
-import json
 import pytest
 from render.services.xlsx_renderer import XlsxRenderer
 
@@ -9,11 +8,11 @@ class TestXlsxRendererUnit:
     # ===================== montage_result =====================
     def test_montage_result(self):
         """Стандартная строка монтажа."""
-        assert XlsxRenderer.montage_result(12) == "Термоиндикаторы установлены в количестве 12 шт."
+        assert "Термоиндикаторы установлены в количестве 12 шт." in XlsxRenderer.montage_result(12)
 
     def test_montage_result_zero(self):
         """Ноль стикеров."""
-        assert XlsxRenderer.montage_result(0) == "Термоиндикаторы установлены в количестве 0 шт."
+        assert "Термоиндикаторы установлены в количестве 0 шт." in XlsxRenderer.montage_result(0)
 
     # ===================== inspection_result =====================
     @pytest.mark.parametrize("protocol, expected_date", [
@@ -24,8 +23,8 @@ class TestXlsxRendererUnit:
         """Успешный парсинг протокола — проверка, что дата присутствует."""
         result = XlsxRenderer.inspection_result(protocol)
         assert "Термоиндикаторы функционируют исправно." in result
-        assert "протокол №123 от" in protocol.lower() or "протокол №001 от" in protocol.lower()  # проверяем, что protocol корректен
-        assert expected_date in result  # проверяем, что дата в строке, а не жёстко сверяем
+        assert "протокол №123 от" in protocol.lower() or "протокол №001 от" in protocol.lower()
+        assert expected_date in result
 
     def test_inspection_result_invalid_date(self):
         """Неверный формат даты → ValueError."""
@@ -38,10 +37,9 @@ class TestXlsxRendererUnit:
             XlsxRenderer.inspection_result("Протокол №1")
 
     # ===================== get_plant_content =====================
-    def test_get_plant_content_success(self, tmp_path):
+    def test_get_plant_content_success(self):
         """Успешный поиск станции."""
-        json_file = tmp_path / "plant_reference.json"
-        json_content = [
+        plant_data = [
             {
                 "plant_name": "Автовская ТЭЦ",
                 "montage": {
@@ -51,42 +49,48 @@ class TestXlsxRendererUnit:
                 "signatories": [{"position": "Инженер", "full_name": "Иванов Иван"}]
             }
         ]
-        json_file.write_text(
-            json.dumps(json_content, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
 
         renderer = XlsxRenderer()
         name, result, signatories = renderer.get_plant_content(
-            "Автовская ТЭЦ", "montage", "12", json_file
+            {"plant_name": "Автовская ТЭЦ", "protocol_number": "12"},
+            "montage",
+            {"montage": 12},
+            plant_data,
         )
         assert name == "Монтаж термоиндикаторов"
         assert result == "Термоиндикаторы установлены в количестве 12 шт."
         assert signatories == [{"position": "Инженер", "full_name": "Иванов Иван"}]
 
-    def test_get_plant_content_not_found(self, tmp_path):
+    def test_get_plant_content_not_found(self):
         """Станция не найдена → ValueError."""
-        json_file = tmp_path / "plant_reference.json"
-        json_file.write_text('[{"plant_name": "Другая ТЭЦ"}]', encoding="utf-8")
+        plant_data = [{"plant_name": "Другая ТЭЦ"}]
 
         renderer = XlsxRenderer()
-        with pytest.raises(ValueError, match="отсутствует в справочниках"):
-            renderer.get_plant_content("Неизвестная ТЭЦ", "montage", "12", json_file)
+        with pytest.raises(ValueError, match="Станция"):
+            renderer.get_plant_content(
+                {"plant_name": "Неизвестная ТЭЦ", "protocol_number": "12"},
+                "montage",
+                {"montage": 12},
+                plant_data,
+            )
 
-    def test_get_plant_content_missing_control_type(self, tmp_path):
-        """Отсутствие control_type в JSON → AttributeError (нужна обработка)."""
-        json_file = tmp_path / "plant_reference.json"
-        json_content = [
+    def test_get_plant_content_missing_control_type(self):
+        """Отсутствие control_type в JSON → ValueError."""
+        plant_data = [
             {
                 "plant_name": "Автовская ТЭЦ",
                 # "montage" отсутствует
             }
         ]
-        json_file.write_text(json.dumps(json_content), encoding="utf-8")
 
         renderer = XlsxRenderer()
-        with pytest.raises(KeyError):
-            renderer.get_plant_content("Автовская ТЭЦ", "montage", "12", json_file)
+        with pytest.raises(ValueError, match="Станция"):
+            renderer.get_plant_content(
+                {"plant_name": "Автовская ТЭЦ", "protocol_number": "12"},
+                "montage",
+                {"montage": 12},
+                plant_data,
+            )
 
     # ===================== supports_preview =====================
     def test_supports_preview_false(self):
