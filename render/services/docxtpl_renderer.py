@@ -36,6 +36,7 @@ class DocxTplRenderer(ReportRenderer):
         self.resized_images_store = Path("./resized_images_store")
         self.blank_image = "blank_image"
         self.prefix_name = {0: "visual", 1: "thermal"}
+        self.DEBUG = False  # выводим отладочную информацию
         
     @property
     def format_name(self) -> str:
@@ -47,7 +48,7 @@ class DocxTplRenderer(ReportRenderer):
     
     def defect_summary(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """ Определяет группу дефектов на основе методики. """
-        group_label = ""
+        group_label, output_text = "", ""
         t_max = row.get("t_max") or 0
         t_sticker_min = row.get("t_sticker_min") or 0
         if t_sticker_min == 0:
@@ -60,6 +61,7 @@ class DocxTplRenderer(ReportRenderer):
         max_excess = max(excess_sticker, excess_thermal)
         if row["is_panel"] == "MOTOR":
             group_label = "Начальная стадия развития дефекта."
+            output_text = "Развитие дефекта."
             defect_weight = 6
             if (
                 row["defect_type_short_name"] == "Качение" and t_sticker_min >= 110 or
@@ -73,6 +75,11 @@ class DocxTplRenderer(ReportRenderer):
                 row["is_test_ready"] and t_anomaly >= 15
             ):
                 group_label = "Дефекты электродвигателей с высоким риском отказа."
+                output_text = (
+                    "Превышение установленного абсолютного значения "
+                    "наибольшей допустимой температуры. Высокий "
+                    "риск отказа электродвигателя."
+                )
                 defect_weight = 4
             elif (
                 row["defect_type_short_name"] == "Качение" and 80 <= t_sticker_min < 110 or
@@ -89,6 +96,10 @@ class DocxTplRenderer(ReportRenderer):
                     "Дефекты электродвигателей с превышением наибольшей "
                     "допустимой температуры."
                 )
+                output_text = (
+                    "Превышение установленного абсолютного значения "
+                    "наибольшей допустимой температуры."
+                )
                 defect_weight = 5
         
         if row["is_panel"] == "PANEL":
@@ -98,6 +109,11 @@ class DocxTplRenderer(ReportRenderer):
             delta_t = t_observed - t_environment
             nominal = row.get("nominal_current", 1) or 1
             measured = row.get("measured_current", 1) or 1
+            nominal = measured if (measured > nominal or measured == 1) else nominal
+            '''
+            1) Если Iраб > Iном., то считать, что Iном = Iраб;
+            2) если неизвестны Iном или Iраб или оба тока, то считать, что Iном = Iраб;
+            '''
             excess_temp_to_current = float(delta_t) * (nominal / measured) ** 2
             excess_temp_to_half_current = (
                 float(t_observed - t_similar_unit) * (0.5 * nominal / measured) ** 2
@@ -116,6 +132,18 @@ class DocxTplRenderer(ReportRenderer):
                 current03_cond and (excess_temp_to_half_current - 30) > 200 or
                 current00_cond and delta_t >= 30
             ):
+                if self.DEBUG:
+                    print(
+                        f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
+                        f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
+                        f" DEBUG1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and max_excess >= 30}"
+                        f" DEBUG2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and max_excess >= 80}"
+                        f" DEBUG3: {row['is_attention_required'] is True}"
+                        f" DEBUG4: {(delta_t + 40 - t_max) > 150}"
+                        f" DEBUG5: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
+                        f" DEBUG6: {current03_cond and (excess_temp_to_half_current - 30) > 200}"
+                        f" DEBUG7: {current00_cond and delta_t >= 30}"
+                    )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
                     "наибольшей допустимой температуры и требующие повышенного внимания."
@@ -131,12 +159,26 @@ class DocxTplRenderer(ReportRenderer):
                 current00_cond and delta_t >= 10 or
                 is_test_ready is False and (t_sticker_min - t_max >= 0)
             ):
+                if self.DEBUG:
+                    print(
+                        f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
+                        f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
+                        f" DEBUG1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and 0 < max_excess < 30}"
+                        f" DEBUG2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and 70 <= max_excess < 80}"
+                        f" DEBUG3: {is_test_ready and delta_t >= t_excess}"
+                        f" DEBUG4: {current06_cond and (excess_temp_to_current >= t_excess)}"
+                        f" DEBUG5: {current03_cond and (excess_temp_to_half_current >= t_excess)}"
+                        f" DEBUG6: {current03_cond and ((excess_temp_to_half_current - 30) >= 0)}"
+                        f" DEBUG7: {current00_cond and delta_t >= 10}"
+                        f" DEBUG8: {is_test_ready is False and (t_sticker_min - t_max >= 0)}"
+                    )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
                     "наибольшей допустимой температуры."
                 )
                 defect_weight = 2
         row["group_label"] = group_label
+        row["output_text"] = output_text
         row["defect_weight"] = defect_weight
         return row
     
@@ -296,6 +338,9 @@ class DocxTplRenderer(ReportRenderer):
             logo_image = InlineImage(doc, image_descriptor=f"{report.path}/{self.logoname}", width=Mm(40))
 
             jinja_env = template_renderer._create_environment(report)
+
+            if self.DEBUG:
+                print(f"DATA: {self.query_results['data']}")
             
             # Расчитываем текстовый вывод по группам дефектов
             data_with_summary = [
@@ -342,7 +387,7 @@ class DocxTplRenderer(ReportRenderer):
                         "generated_at": datetime.utcnow().isoformat(),
                         "version": report.metadata.version,
                 },
-                "debug": False, # выводим отладочную информацию
+                "debug": self.DEBUG, # выводим отладочную информацию
             }
             
             doc.render(context, jinja_env)
