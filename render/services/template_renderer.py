@@ -66,7 +66,7 @@ class TemplateRenderer:
     
     def output_parser(self, number: float) -> str:
         """Формирует строку-условие для превышения температуры, округляя значение до ближайших 10°C."""
-        result = math.floor(number / 10) * 10
+        result = self.to_nearest_ten(number)
         if result >= 200:
             result = 200
         cond_string = f" более чем на {result} °C"
@@ -85,6 +85,112 @@ class TemplateRenderer:
         if not isinstance(sticker, str):
             raise TypeError(f"Expected str, got {type(sticker).__name__}")
         return sticker.replace("°С", " °С")
+
+    def to_nearest_ten(self, number: float) -> int:
+        """Округляет число до ближайшей десятичной части."""
+        return math.floor(number / 10) * 10
+
+    def extract_item(self, lst, idx=0):
+        """Извлекает элемент по индексу, возвращает 0 если нет."""
+        if not lst or idx >= len(lst):
+            return 0
+        value = lst[idx]
+        if value is None or not isinstance(value, str):
+            return value if value is not None else 0
+        return self.t_sticker_parser(value)
+
+    def history_inspection_parser(self, row: Dict[str, Any]) -> str:
+        """ 
+        Сравнивает текущие показания температуры (тепловизор, термоиндикаторная наклейка,
+        превышение над окружающей средой) с историческими данными по тому же узлу
+        оборудования. Определяет, развивается ли дефект или устранён.
+        """
+        try:
+            unit_names = row.get("history_unit_names", [])
+            unit_name = row.get("unit_name")
+            idx = unit_names.index(unit_name)
+        except (ValueError, TypeError):
+            raise ValueError(f"The unit '{row.get('unit_name')}' is not in the list.")
+
+        past = (
+            f"Осмотр {self.add_day_parser(row['history_unit_detected_at'][idx], 0)} "
+            f"- регистрация дефекта."
+        )
+
+        if row.get("defect_status") == "RESOLVED":
+            present  = (
+                f"Осмотр {self.add_day_parser(row['started_at'], 0)} "
+                f"- дефект устранен."
+            )
+            return (past + "\n\n" + present)
+
+        history_t_observed = self.extract_item(row.get("history_t_observed"), idx)
+        history_t_sticker = self.extract_item(row.get("history_t_stickers"), idx)
+        history_t_excess = self.extract_item(row.get("history_t_excess"), idx)
+        history_t_environment = self.extract_item(row.get("history_t_environment"), idx)
+        history_t_max = max(history_t_sticker, history_t_observed)
+        
+        t_sticker = self.t_sticker_parser(row.get("t_sticker"))
+        t_observed  = row.get("t_observed") or 0
+        t_environment = row.get("t_environment") or 0
+        t_excess = row.get("t_excess") or 0
+        t_max = max(t_sticker, t_observed)
+
+        cond_one = (
+            history_t_observed and 
+            history_t_sticker and
+            t_sticker and
+            t_observed
+        )
+
+        if cond_one and (t_max - history_t_max) > 10:
+            result = self.to_nearest_ten(t_max - history_t_max)
+            present = (
+                f"Осмотр {self.add_day_parser(row['started_at'], 0)} "
+                f"- развитие дефекта, рост абсолютного значения "
+                f"допустимой температуры на {result} °С."
+            )
+            return (past + "\n\n" + present)
+
+        cond_two = (
+            not (history_t_observed and 
+            t_observed) and
+            history_t_sticker and
+            t_sticker
+        )
+        if cond_two and (t_sticker - history_t_sticker) > 10:
+            result = self.to_nearest_ten(t_sticker - history_t_sticker)
+            present = (
+                f"Осмотр {self.add_day_parser(row['started_at'], 0)} "
+                f"- развитие дефекта, рост температуры "
+                f"Ттин на {result} °С."
+            )
+            return (past + "\n\n" + present)
+
+        history_delta_t = history_t_observed - history_t_environment - history_t_excess
+        delta_t = t_observed - t_environment - t_excess
+        cond_three = (
+            history_t_observed and 
+            history_t_environment and
+            history_t_excess and
+            t_observed and
+            t_environment and
+            t_excess
+        )
+        if cond_three and (delta_t - history_delta_t) > 10:
+            result = self.to_nearest_ten(delta_t - history_delta_t)
+            present = (
+                f"Осмотр {self.add_day_parser(row['started_at'], 0)} "
+                f"- развитие дефекта, рост температуры "
+                f"Тпрев на {result} °С."
+            )
+            return (past + "\n\n" + present)
+
+        present = (
+            f"Осмотр {self.add_day_parser(row['started_at'], 0)} "
+            f"- дефект не устранен."
+        )
+        return (past + "\n\n" + present)
 
     def _create_environment(self, report: Report) -> Environment:
         """Create Jinja2 environment for specific report."""
@@ -114,6 +220,7 @@ class TemplateRenderer:
         env.filters["output_parser"] = self.output_parser
         env.filters["equipment_parser"] = self.equipment_parser
         env.filters["add_day_parser"] = lambda dt, days=1: self.add_day_parser(dt, days)
+        env.filters["history_inspection_parser"] = self.history_inspection_parser
 
         # Add S3 image URL filter
         env.filters["image_url"] = s3_image_service.image_url

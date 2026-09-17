@@ -31,7 +31,7 @@ class DocxTplRenderer(ReportRenderer):
 
     def __init__(self):
         self.logoname = "thermoelectrica_logo.png"
-        self.file_docx = "album_template.docx"
+        self.file_docx = "album_template_new.docx"
         self.output_path = Path("./generated_template.docx")
         self.resized_images_store = Path("./resized_images_store")
         self.blank_image = "blank_image"
@@ -367,10 +367,10 @@ class DocxTplRenderer(ReportRenderer):
                         exif_data = self._find_image_exif(image_obj)
                         if exif_data == self.prefix_name[idx]:
                             image_descriptor=f"{self.resized_images_store}/{image_obj}"
-                
+
                     picture = InlineImage(
-                        doc, 
-                        image_descriptor=image_descriptor, 
+                        doc,
+                        image_descriptor=image_descriptor,
                         width=Mm(67),
                     )
                     pictures.append(picture)
