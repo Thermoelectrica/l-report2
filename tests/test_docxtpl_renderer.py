@@ -246,4 +246,280 @@ async def test_fetch_images_logs_stats(renderer, sample_query_results, caplog, v
             assert "Images downloaded: 1" in caplog.text
             assert "from cache: 0" in caplog.text
             assert "errors: 0" in caplog.text
+
+
+# =========================
+# Тесты defect_summary
+# =========================
+
+class TestDefectSummary:
+    """Тесты метода defect_summary для MOTOR и PANEL."""
+
+    @pytest.fixture
+    def renderer(self):
+        r = DocxTplRenderer()
+        r.DEBUG = False
+        return r
+
+    @pytest.fixture
+    def motor_row(self):
+        """Базовая строка для электродвигателя."""
+        return {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Подшипник",
+            "t_sticker": ">120",
+            "t_sticker_min": 120,
+            "t_max": 110,
+            "t_observed": 95.0,
+            "t_similar_unit": 95.0,
+            "is_test_ready": True,
+        }
+
+    @pytest.fixture
+    def panel_row(self):
+        """Базовая строка для распределительного устройства."""
+        return {
+            "is_panel": "PANEL",
+            "equipment_type_name": "Ячейка КРУ 6-10 кВ",
+            "t_sticker": ">30",
+            "t_sticker_min": 30,
+            "t_max": 70,
+            "t_observed": 30.0,
+            "t_environment": 25.0,
+            "t_similar_unit": 85.0,
+            "t_excess": 20.0,
+            "nominal_current": 10.0,
+            "measured_current": 8.0,
+            "is_test_ready": True,
+            "is_attention_required": False,
+        }
+
+    # ─── MOTOR: базовый уровень (weight=6) ─────────────────────────
+
+    def test_motor_default_initial_values(self, renderer, motor_row):
+        result = renderer.defect_summary(motor_row)
+        assert result["group_label"] == "Начальная стадия развития дефекта."
+        assert result["output_text"] == "Развитие дефекта."
+        assert result["defect_weight"] == 6
+
+    # ─── MOTOR: высокий риск отказа (weight=4) ────────────────────
+
+    def test_motor_high_risk_kachenie(self, renderer, motor_row):
+        motor_row["defect_type_short_name"] = "Качение"
+        motor_row["t_sticker_min"] = 110
+        result = renderer.defect_summary(motor_row)
+        assert "высоким риском отказа" in result["group_label"].lower()
+        assert result["defect_weight"] == 4
+
+    def test_motor_high_risk_skolzhenie(self, renderer):
+        row = {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Скольжение",
+            "t_sticker": ">80",
+            "t_sticker_min": 80,
+            "t_max": 70,
+            "t_observed": 65.0,
+            "t_similar_unit": 60.0,
+            "is_test_ready": True,
+        }
+        result = renderer.defect_summary(row)
+        assert "высоким риском отказа" in result["group_label"].lower()
+        assert result["defect_weight"] == 4
+
+    def test_motor_high_risk_anomaly(self, renderer):
+        row = {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Качение",
+            "t_sticker": ">50",
+            "t_sticker_min": 50,
+            "t_max": 110,
+            "t_observed": 105.0,
+            "t_similar_unit": 90.0,  # anomaly = 15
+            "is_test_ready": True,
+        }
+        result = renderer.defect_summary(row)
+        assert "высоким риском отказа" in result["group_label"].lower()
+        assert result["defect_weight"] == 4
+
+    # ─── MOTOR: превышение температуры (weight=5) ─────────────────
+
+    def test_motor_exceeded_kachenie_80_110(self, renderer):
+        row = {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Качение",
+            "t_sticker": ">95",
+            "t_sticker_min": 95,
+            "t_max": 110,
+            "t_observed": 90.0,
+            "t_similar_unit": 85.0,
+            "is_test_ready": True,
+        }
+        result = renderer.defect_summary(row)
+        assert "превышением наибольшей" in result["group_label"].lower()
+        assert "допустимой температуры." in result["output_text"]
+        assert result["defect_weight"] == 5
+
+    def test_motor_exceeded_skolzhie_70_80(self, renderer):
+        row = {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Скольжение",
+            "t_sticker": ">75",
+            "t_sticker_min": 75,
+            "t_max": 80,
+            "t_observed": 65.0,
+            "t_similar_unit": 60.0,
+            "is_test_ready": True,
+        }
+        result = renderer.defect_summary(row)
+        assert "превышением наибольшей" in result["group_label"].lower()
+        assert result["defect_weight"] == 5
+
+    def test_motor_exceeded_anomaly_0_15(self, renderer):
+        row = {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Качение",
+            "t_sticker": ">50",
+            "t_sticker_min": 50,
+            "t_max": 110,
+            "t_observed": 95.0,
+            "t_similar_unit": 85.0,  # anomaly = 10, 0 < 10 < 15
+            "is_test_ready": True,
+        }
+        result = renderer.defect_summary(row)
+        assert "превышением наибольшей" in result["group_label"].lower()
+        assert result["defect_weight"] == 5
+
+    # ─── PANEL: базовый уровень (weight=3) ────────────────────────
+
+    def test_panel_default_initial_values(self, renderer, panel_row):
+        panel_row["max_excess"] = 0
+        result = renderer.defect_summary(panel_row)
+        assert result["group_label"] == "Начальная стадия развития дефекта."
+        assert result["defect_weight"] == 3
+
+    # ─── PANEL: критический (weight=1) ────────────────────────────
+
+    def test_panel_critical_max_excess_30(self, renderer):
+        row = {
+            "is_panel": "PANEL",
+            "equipment_type_name": "Ячейка КРУ 0,4 кВ",
+            "t_sticker": ">100",
+            "t_sticker_min": 100,
+            "t_max": 70,
+            "t_observed": 95.0,
+            "t_environment": 25.0,
+            "t_similar_unit": 90.0,
+            "t_excess": 20.0,
+            "nominal_current": 10.0,
+            "measured_current": 8.0,
+            "is_test_ready": True,
+            "is_attention_required": False,
+        }
+        # max_excess = max(100-70, 95-70) = 30 >= 30
+        result = renderer.defect_summary(row)
+        assert "превышением" in result["group_label"].lower()
+        assert "повышенного внимания." in result["group_label"].lower()
+        assert result["defect_weight"] == 1
+
+    def test_panel_attention_required(self, renderer):
+        row = {
+            "is_panel": "PANEL",
+            "equipment_type_name": "Ячейка КРУ 0,4 кВ",
+            "t_sticker": ">80",
+            "t_sticker_min": 80,
+            "t_max": 70,
+            "t_observed": 85.0,
+            "t_environment": 25.0,
+            "t_similar_unit": 80.0,
+            "t_excess": 20.0,
+            "nominal_current": 10.0,
+            "measured_current": 8.0,
+            "is_test_ready": True,
+            "is_attention_required": True,
+        }
+        result = renderer.defect_summary(row)
+        assert "повышенного внимания." in result["group_label"].lower()
+        assert result["defect_weight"] == 1
+
+    # ─── PANEL: умеренный (weight=2) ──────────────────────────────
+
+    def test_panel_moderate_max_excess_10(self, renderer):
+        row = {
+            "is_panel": "PANEL",
+            "equipment_type_name": "Ячейка КРУ 0,4 кВ",
+            "t_sticker": ">80",
+            "t_sticker_min": 80,
+            "t_max": 70,
+            "t_observed": 85.0,
+            "t_environment": 25.0,
+            "t_similar_unit": 80.0,
+            "t_excess": 20.0,
+            "nominal_current": 10.0,
+            "measured_current": 8.0,
+            "is_test_ready": True,
+            "is_attention_required": False,
+        }
+        # max_excess = max(10, 15) = 15, 0 < 15 < 30
+        result = renderer.defect_summary(row)
+        assert "превышением наибольшей" in result["group_label"].lower()
+        assert "повышенного" not in result["group_label"].lower()
+        assert result["defect_weight"] == 2
+
+    def test_panel_moderate_test_ready_delta_gt_excess(self, renderer):
+        row = {
+            "is_panel": "PANEL",
+            "equipment_type_name": "Ячейка КРУ 0,4 кВ",
+            "t_sticker": ">75",
+            "t_sticker_min": 75,
+            "t_max": 70,
+            "t_observed": 85.0,
+            "t_environment": 25.0,
+            "t_similar_unit": 80.0,
+            "t_excess": 20.0,
+            "nominal_current": 10.0,
+            "measured_current": 8.0,
+            "is_test_ready": True,
+            "is_attention_required": False,
+        }
+        # delta_t = 60, t_excess = 20 → delta_t >= t_excess
+        result = renderer.defect_summary(row)
+        assert "превышением наибольшей" in result["group_label"].lower()
+        assert "повышенного" not in result["group_label"].lower()
+        assert result["defect_weight"] == 2
+
+    # ─── Обработка None/0 значений ────────────────────────────────
+
+    def test_panel_handles_missing_currents(self, renderer):
+        row = {
+            "is_panel": "PANEL",
+            "equipment_type_name": "Ячейка КРУ 0,4 кВ",
+            "t_sticker": ">80",
+            "t_sticker_min": 80,
+            "t_max": 70,
+            "t_observed": 85.0,
+            "t_environment": 25.0,
+            "t_similar_unit": 80.0,
+            "t_excess": 20.0,
+            # nominal_current и measured_current отсутствуют → по умолчанию 1
+            "is_test_ready": True,
+            "is_attention_required": False,
+        }
+        result = renderer.defect_summary(row)
+        assert "defect_weight" in result
+        assert result["defect_weight"] > 0
+
+    def test_motor_handles_missing_t_sticker(self, renderer):
+        row = {
+            "is_panel": "MOTOR",
+            "defect_type_short_name": "Подшипник",
+            "t_sticker": None,
+            "t_sticker_min": 0,
+            "t_max": 110,
+            "t_observed": 95.0,
+            "t_similar_unit": 95.0,
+            "is_test_ready": True,
+        }
+        result = renderer.defect_summary(row)
+        # t_sticker_min = 0 → берётся t_sticker_parser(None) → 0 → fallback t_max
+        assert result["defect_weight"] == 6
             
