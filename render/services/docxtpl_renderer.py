@@ -107,6 +107,11 @@ class DocxTplRenderer(ReportRenderer):
             defect_weight = 3
             t_environment = row.get("t_environment", 0) or 0
             delta_t = t_observed - t_environment
+            '''
+            delta_t_a < 0 and delta_t_b >= 0 
+            '''
+            delta_t_a = t_observed - t_max
+            delta_t_b = t_sticker_min - t_max
             nominal = row.get("nominal_current", 1) or 1
             measured = row.get("measured_current", 1) or 1
             nominal = measured if (measured > nominal or measured == 1) else nominal
@@ -157,7 +162,8 @@ class DocxTplRenderer(ReportRenderer):
                 current03_cond and (excess_temp_to_half_current >= t_excess) or
                 current03_cond and ((excess_temp_to_half_current - 30) >= 0) or
                 current00_cond and delta_t >= 10 or
-                is_test_ready is False and (t_sticker_min - t_max >= 0)
+                is_test_ready is False and (t_sticker_min - t_max >= 0) or
+                delta_t_a < 0 and delta_t_b >= 0
             ):
                 if self.DEBUG:
                     print(
@@ -171,6 +177,7 @@ class DocxTplRenderer(ReportRenderer):
                         f" DEBUG6: {current03_cond and ((excess_temp_to_half_current - 30) >= 0)}"
                         f" DEBUG7: {current00_cond and delta_t >= 10}"
                         f" DEBUG8: {is_test_ready is False and (t_sticker_min - t_max >= 0)}"
+                        f" DEBUG9: {delta_t_a < 0 and delta_t_b >= 0}"
                     )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
