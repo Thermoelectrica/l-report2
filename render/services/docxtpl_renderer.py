@@ -60,18 +60,19 @@ class DocxTplRenderer(ReportRenderer):
         t_anomaly = (t_observed - t_similar_unit) if t_similar_unit else 0
         max_excess = max(excess_sticker, excess_thermal)
         if row["is_panel"] == "MOTOR":
+            max_temp = max((row.get("t_sticker_min") or 0), (row.get("t_observed") or 0))
             group_label = "Начальная стадия развития дефекта."
             output_text = "Развитие дефекта."
             defect_weight = 6
             if (
-                row["defect_type_short_name"] == "Качение" and t_sticker_min >= 110 or
-                row["defect_type_short_name"] == "Скольжение" and t_sticker_min >= 80 or
+                row["defect_type_short_name"] == "Качение" and max_temp >= 110 or
+                row["defect_type_short_name"] == "Скольжение" and max_temp >= 80 or
                 row["defect_type_short_name"] in [
                     "Ток.вед часть (Изол Y)", 
-                    "Ток.вед часть (Изол A)",
+                    "Ток.вед часть",
                     "Ток.вед часть (Изол E)",
-                ] and t_sticker_min >= 110 or
-                row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and t_sticker_min >= 95 or
+                ] and max_temp >= 110 or
+                row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and max_temp >= 95 or
                 row["is_test_ready"] and t_anomaly >= 15
             ):
                 group_label = "Дефекты электродвигателей с высоким риском отказа."
@@ -82,16 +83,26 @@ class DocxTplRenderer(ReportRenderer):
                 )
                 defect_weight = 4
             elif (
-                row["defect_type_short_name"] == "Качение" and 80 <= t_sticker_min < 110 or
-                row["defect_type_short_name"] == "Скольжение" and 70 <= t_sticker_min < 80 or
+                row["defect_type_short_name"] == "Качение" and 80 <= max_temp < 110 or
+                row["defect_type_short_name"] == "Скольжение" and 70 <= max_temp < 80 or
                 row["defect_type_short_name"] in [
                     "Ток.вед часть (Изол Y)", 
-                    "Ток.вед часть (Изол A)",
+                    "Ток.вед часть",
                     "Ток.вед часть (Изол E)",
-                ] and 100 <= t_sticker_min < 110 or
-                row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and 80 <= t_sticker_min < 95 or
+                ] and 100 <= max_temp < 110 or
+                row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and 80 <= max_temp < 95 or
                 0 < t_anomaly < 15
             ):
+                if self.DEBUG:
+                    print(
+                        f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
+                        f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
+                        f" DEBUG1: {row['defect_type_short_name'] == 'Качение' and 80 <= max_temp < 110}"
+                        f" DEBUG2: {row['defect_type_short_name'] == 'Скольжение' and 70 <= max_temp < 80}"
+                        f" DEBUG3: {row['defect_type_short_name'] in ['Ток.вед часть (Изол Y)', 'Ток.вед часть','Ток.вед часть (Изол E)',] and 100 <= max_temp < 110}"
+                        f" DEBUG4: {row['defect_type_short_name'] == 'Каб. нак. (ПВХ)' and 80 <= max_temp < 95}"
+                        f" DEBUG5: {0 < t_anomaly < 15}"
+                    )
                 group_label = (
                     "Дефекты электродвигателей с превышением наибольшей "
                     "допустимой температуры."
