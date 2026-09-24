@@ -192,6 +192,30 @@ class TemplateRenderer:
         )
         return (past + "\n\n" + present)
 
+    def inspector_major_parser(self, data: List[Dict[str, Any]]) -> Dict[str, str]:
+        """ Преобразует список старших инспекторов в словарь «имя → должность».
+        Убирает дубликаты по full_name_major (оставляется последнее вхождение),
+        подставляет должность по умолчанию, если она не указана. """
+        seen_major = {
+            item["full_name_major"]: item.get("position_major") or "Инженер теплового контроля"
+            for item in data if item.get("full_name_major")
+        }
+        return seen_major
+
+    def inspector_minor_parser(self, data: List[Dict[str, Any]]) -> Dict[str, str]:
+        """ Преобразует список младших инспекторов в словарь «имя → должность».
+            Убирает дубликаты по full_names_minor (оставляется последнее вхождение),
+            подставляет должность по умолчанию, если она не указана. """
+        seen_minors = {}
+        for item in data:
+            for elem in item.get("full_names_minor") or []:
+                seen_minors.update(
+                    {
+                        elem: item.get("positions_minor") or "Инженер теплового контроля"
+                    }
+                )
+        return seen_minors
+
     def _create_environment(self, report: Report) -> Environment:
         """Create Jinja2 environment for specific report."""
 
@@ -221,7 +245,8 @@ class TemplateRenderer:
         env.filters["equipment_parser"] = self.equipment_parser
         env.filters["add_day_parser"] = lambda dt, days=1: self.add_day_parser(dt, days)
         env.filters["history_inspection_parser"] = self.history_inspection_parser
-
+        env.filters["inspector_major_parser"] = self.inspector_major_parser
+        env.filters["inspector_minor_parser"] = self.inspector_minor_parser
         # Add S3 image URL filter
         env.filters["image_url"] = s3_image_service.image_url
 

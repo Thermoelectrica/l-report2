@@ -47,7 +47,10 @@ class DocxTplRenderer(ReportRenderer):
         return "docx"
     
     def defect_summary(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """ Определяет группу дефектов на основе методики. """
+        """ Определяет группу дефектов на основе методики 2.
+            Методика 1 реализована в шаблоне. Текущий рачет
+            по методике 2 сильно дополнен и расширён методикой 1.
+        """
         group_label, output_text = "", ""
         t_max = row.get("t_max") or 0
         t_sticker_min = row.get("t_sticker_min") or 0
@@ -139,6 +142,8 @@ class DocxTplRenderer(ReportRenderer):
             current06_cond = (nominal * 0.6 <= measured < nominal) and is_test_ready
             current03_cond = (nominal * 0.3 <= measured < nominal * 0.6) and is_test_ready
             current00_cond = (0 <= measured < nominal * 0.3) and is_test_ready
+            # часть условия 'is_condition_one' из шаблона (методика 2)
+            is_half_condition_one = not t_sticker_min and (delta_t_a >= 0 or delta_t_b >= 0)
             if (
                 row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and max_excess >= 30 or
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and max_excess >= 80 or
@@ -146,7 +151,7 @@ class DocxTplRenderer(ReportRenderer):
                 (delta_t + 40 - t_max) > 150 or
                 current06_cond and (excess_temp_to_current + 40 - t_max) > 150 or
                 current03_cond and (excess_temp_to_half_current - 30) > 200 or
-                current00_cond and delta_t >= 30
+                current00_cond and is_half_condition_one and delta_t >= 30
             ):
                 if self.DEBUG:
                     print(
@@ -158,7 +163,7 @@ class DocxTplRenderer(ReportRenderer):
                         f" DEBUG4: {(delta_t + 40 - t_max) > 150}"
                         f" DEBUG5: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
                         f" DEBUG6: {current03_cond and (excess_temp_to_half_current - 30) > 200}"
-                        f" DEBUG7: {current00_cond and delta_t >= 30}"
+                        f" DEBUG7: {current00_cond and is_half_condition_one and delta_t >= 30}"
                     )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
