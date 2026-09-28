@@ -275,7 +275,7 @@ class DocxTplRenderer(ReportRenderer):
                         new_height = int(height * (new_width / width))
                         img = img.resize((new_width, new_height), Image.BICUBIC)
                         exif_data[270] = "thermal"  # Тег 270 соответствует ImageDescription
-                        img.save(file_name, exif=exif_data)
+                        img.save(file_name, exif=exif_data.tobytes())
                         return True
                     
                     if width > height: # поворот на 90 градусов
@@ -284,8 +284,11 @@ class DocxTplRenderer(ReportRenderer):
                     new_height = 680 # это пиксели для 90мм (72x72 dpi)
                     new_width = 511
                     img = img.resize((new_width, new_height), Image.BICUBIC)
+                    if (len(exif_data) > 0):     
+                        exif_data = img.getexif()
+                        exif_data.clear()
                     exif_data[270] = "visual"  # Тег 270 соответствует ImageDescription
-                    img.save(file_name, exif=exif_data)
+                    img.save(file_name, exif=exif_data.tobytes())
                 return True
                 
         except httpx.TimeoutException:
