@@ -8,6 +8,7 @@ from .report_renderer import ReportRenderer
 from .weasyprint_renderer import weasyprint_renderer
 from .docxtpl_renderer import docxtpl_renderer
 from .xlsx_renderer import xlsx_renderer
+from .xlsx_work_control import xlsx_work_control
 
 logger = logging.getLogger(__name__)
 
@@ -69,3 +70,5 @@ renderer_registry = ReportRegistry()
 renderer_registry.register(weasyprint_renderer)
 renderer_registry.register(docxtpl_renderer)
 renderer_registry.register(xlsx_renderer)
+renderer_registry.register(xlsx_work_control)
+
