@@ -41,7 +41,7 @@ class XlsxWorkControl(ReportRenderer):
         
     @property
     def format_name(self) -> str:
-        return "xlsx"
+        return "xlsx-work"
 
     @property
     def file_extension(self) -> str:
@@ -87,7 +87,7 @@ class XlsxWorkControl(ReportRenderer):
         value = [
             ["Объект:", f"{plant}"],
             ["Роль:", f"{role}"],
-            ["ТИ (шт.):", f"{stickers}"],
+            ["ТИ (шт.):", f"{stickers or 0}"],
             ["Дефекты:", ""],
             ["Время:", self.time_converter(hours)],
             ["Монтаж:", self.time_converter(montage)],
@@ -258,10 +258,11 @@ class XlsxWorkControl(ReportRenderer):
                         else:
                             merge_dict[row_data["full_name"]] = [row_idx]
                     if col_idx == 3:
-                        cell_obj = sheet.cell(row=row_idx, column=col_idx, value="Инженер теплового контроля")
+                        position = row_data.get("position", "Инженер теплового контроля")
+                        cell_obj = sheet.cell(row=row_idx, column=col_idx, value=position)
                     if col_idx > 3:
                         try:
-                            idx_major = col_data["major_names"].index(row_data["full_name"])
+                            idx_major = col_data["full_name_major"].index(row_data["full_name"])
                             _, value = self.get_value(col_data, idx_major, "РР")
                             pos = 0
                             if col_data == extended_data[col_idx -2]:
@@ -273,7 +274,7 @@ class XlsxWorkControl(ReportRenderer):
                             )
                         except ValueError:
                             success = False
-                            for idx, elem in enumerate(col_data["minor_names"]):
+                            for idx, elem in enumerate(col_data["full_names_minor"]):
                                 try:
                                     _ = elem.index(row_data["full_name"])
                                     _, value = self.get_value(col_data, idx, "ПР")
@@ -321,8 +322,8 @@ class XlsxWorkControl(ReportRenderer):
                 file_stream = tmp.read()
 
         except Exception as exc:
-            logger.error(f"XLSX rendering failed: {exc}")
-            raise RuntimeError(f"XLSX rendering failed: {exc}")
+            logger.error(f"XLSX-work rendering failed: {exc}")
+            raise RuntimeError(f"XLSX-work rendering failed: {exc}")
         return file_stream
 
     async def render(
@@ -345,7 +346,7 @@ class XlsxWorkControl(ReportRenderer):
         self.query_results = query_results
 
         try:
-            logger.info(f"Generating XLSX from raw data (source: {report.path})")
+            logger.info(f"Generating XLSX-work from raw data (source: {report.path})")
 
             # If base_url not provided, use report.path as base
             if base_url is None:
@@ -355,12 +356,12 @@ class XlsxWorkControl(ReportRenderer):
 
             # рендерим XLSX
             xlsx_bytes = await asyncio.to_thread(self.render_xlsx, report, parameters)
-            logger.info(f"XLSX generated successfully, size: {len(xlsx_bytes)} bytes")
+            logger.info(f"XLSX-work generated successfully, size: {len(xlsx_bytes)} bytes")
             return xlsx_bytes
 
         except Exception as e:
-            logger.error(f"XLSX generation failed: {e}")
-            raise RuntimeError(f"XLSX generation failed: {e}")
+            logger.error(f"XLSX-work generation failed: {e}")
+            raise RuntimeError(f"XLSX-work generation failed: {e}")
 
 # Global XlsxRenderer instance
 xlsx_work_control = XlsxWorkControl()
