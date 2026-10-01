@@ -208,10 +208,10 @@ class TemplateRenderer:
             подставляет должность по умолчанию, если она не указана. """
         seen_minors = {}
         for item in data:
-            for elem in item.get("full_names_minor") or []:
+            for idx, elem in enumerate(item.get("full_names_minor") or []):
                 seen_minors.update(
                     {
-                        elem: item.get("positions_minor") or "Инженер теплового контроля"
+                        elem: item.get("positions_minor", [])[idx] or "Инженер теплового контроля"
                     }
                 )
         return seen_minors
