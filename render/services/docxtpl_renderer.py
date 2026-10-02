@@ -119,13 +119,11 @@ class DocxTplRenderer(ReportRenderer):
         if row["is_panel"] == "PANEL":
             group_label = "Начальная стадия развития дефекта."
             defect_weight = 3
+            t_sticker = row.get("t_sticker_min") or 0
             t_environment = row.get("t_environment", 0) or 0
             delta_t = t_observed - t_environment
-            '''
-            delta_t_a < 0 and delta_t_b >= 0 
-            '''
             delta_t_a = t_observed - t_max
-            delta_t_b = t_sticker_min - t_max
+            delta_t_b = t_sticker - t_max
             nominal = row.get("nominal_current", 1) or 1
             measured = row.get("measured_current", 1) or 1
             nominal = measured if (measured > nominal or measured == 1) else nominal
@@ -143,7 +141,14 @@ class DocxTplRenderer(ReportRenderer):
             current03_cond = (nominal * 0.3 <= measured < nominal * 0.6) and is_test_ready
             current00_cond = (0 <= measured < nominal * 0.3) and is_test_ready
             # часть условия 'is_condition_one' из шаблона (методика 2)
-            is_half_condition_one = not t_sticker_min and (delta_t_a >= 0 or delta_t_b >= 0)
+            is_condition_one = (
+                (t_sticker != 0 and 
+                ((delta_t_a >= 0 and delta_t_b >= 0) or 
+                 (delta_t_a >= 0 and delta_t_b < 0) or 
+                 (delta_t_a < 0 and delta_t_b >= 0))) or 
+                 (t_sticker == 0 and 
+                 (delta_t_a >= 0 or delta_t_b >= 0))
+            )
             if (
                 row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and max_excess >= 30 or
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and max_excess >= 80 or
@@ -151,7 +156,8 @@ class DocxTplRenderer(ReportRenderer):
                 (delta_t + 40 - t_max) > 150 or
                 current06_cond and (excess_temp_to_current + 40 - t_max) > 150 or
                 current03_cond and (excess_temp_to_half_current - 30) > 200 or
-                current00_cond and is_half_condition_one and delta_t >= 30
+                current00_cond and not is_condition_one and delta_t >= 30 or  # п.3_2 шаблона
+                is_condition_one and (delta_t_a >= 100 or delta_t_b >= 100)   # п.1_3_1 шаблона
             ):
                 if self.DEBUG:
                     print(
@@ -163,7 +169,8 @@ class DocxTplRenderer(ReportRenderer):
                         f" DEBUG4: {(delta_t + 40 - t_max) > 150}"
                         f" DEBUG5: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
                         f" DEBUG6: {current03_cond and (excess_temp_to_half_current - 30) > 200}"
-                        f" DEBUG7: {current00_cond and is_half_condition_one and delta_t >= 30}"
+                        f" DEBUG7: {current00_cond and not is_condition_one and delta_t >= 30}"
+                        f" DEBUG8: {is_condition_one and (delta_t_a >= 100 or delta_t_b >= 100)}"
                     )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
