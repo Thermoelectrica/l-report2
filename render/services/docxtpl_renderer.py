@@ -376,9 +376,15 @@ class DocxTplRenderer(ReportRenderer):
                 print(f"DATA: {self.query_results['data']}")
             
             # Расчитываем текстовый вывод по группам дефектов
-            data_with_summary = [
-                self.defect_summary(row) for row in self.query_results["data"]
-            ]
+            data_with_summary = []
+            for row in self.query_results["data"]:
+                result = self.defect_summary(row)
+                if (
+                    not params.get("include_developing") and 
+                    result["defect_weight"] in [3, 6]
+                ):
+                    continue  # пропускаем развивающиеся дефекты
+                data_with_summary.append(result)
             
             # Сортируем список по весу дефекта
             self.query_results["data"] = sorted(data_with_summary, key=lambda x: x["defect_weight"])

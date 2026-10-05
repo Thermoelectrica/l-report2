@@ -182,7 +182,7 @@ def report_details_panel() -> rx.Component:
             # Parameters form
             rx.form(
                 rx.vstack(
-                    rx.heading("Parameters", size="4"),
+                    rx.heading("Параметры", size="4"),
                     rx.cond(
                         State.report_parameters,
                         rx.vstack(
