@@ -20,8 +20,8 @@ class XlsxWorkControl(ReportRenderer):
     """Generate XLSX using Xlsx from raw data."""
 
     def __init__(self):
-        self.exclude_names = [
-            "Попов Алексей",
+        self.exclude_names = (
+            "Попов Алексей Андреевич",
             "Cкребцов Станислав Юрьевич",
             "Алексей Валерьевич Лесив",
             "Test Inspector",
@@ -29,15 +29,34 @@ class XlsxWorkControl(ReportRenderer):
             "Бирюков Арсений Андреевич",
             "Гришин Егор Витальевич",
             "Иванов Иван Иванович",
-            "Годовалов Владимир",
-            "Андреев Денис",
+            "Годовалов Владимир Алексеевич",
+            "Андреев Денис Альбертович",
             "Сорванова Ксения Владимировна",
             "Инспектор КС ГЭС",
             "Инспектор экскаваторы",
             "Инспектор Карелия",
             "Ерошкина Елизавета Алексеевна",
             "Демо"
-        ]
+        )
+        # Первое значение - название столбца
+        # Второе значение - ширина столбца
+        # Третье значение - имя ключа из self.summary_analytics
+        # или пропуск ("") или обособленная операция
+        self.header_analitycs = (
+            ("№ п/п", 10, ""),
+            ("Ф.И.О.", 40, ""),
+            ("Роль", 20, "Роль:"),
+            ("Ко-во рабочих дней", 20, "Сумма дней"),
+            ("Среднее время в день, ч.", 20, "Время:"),
+            ("Общее кол-во установленных ТИ, шт.", 20, "ТИ (шт.):"),
+            ("Просроченные отчеты", 20, ""),
+            ("Кол-во ошибок", 20, ""),
+            ("Объекты", 40, "Объект:")
+        )
+        self.WEEKDAYS = {
+            0: 'пн', 1: 'вт', 2: 'ср', 3: 'чт',
+            4: 'пт', 5: 'сб', 6: 'вс'
+        }
         
     @property
     def format_name(self) -> str:
@@ -60,7 +79,45 @@ class XlsxWorkControl(ReportRenderer):
     def supports_preview(self) -> bool:
         return False
 
+    def cell_calculator(self, key: str, obj: dict[str, list[str]]) -> str:
+        """Вычисляет значение ячейки для аналитической справки по ключу."""
+        if key == "Роль:":
+            unique = list(set(obj[key]))
+            if not unique:
+                return ""
+            if len(unique) == 1:
+                return unique[0]
+            return f"{unique[0]}/{unique[1]}"
+        if key == "Сумма дней":
+            times = obj.get("Время:") or []
+            return len(times)
+        if key == "Время:":
+            times = obj.get("Время:") or []
+            if not times:
+                return "00:00"
+            return self.average_time(times)
+        if key == "ТИ (шт.):":
+            values = obj.get("ТИ (шт.):") or []
+            return str(sum(int(i) for i in values if i))
+        if key == "Объект:":
+            plants = list(set(obj.get("Объект:") or []))
+            if len(plants) > 1:
+                return ", ".join(plants)
+            return plants[0] if plants else ""
+        return ""
+
+    def average_time(self, times: list[str]) -> str:
+        """Вычисляет среднее время из списка строк в формате HH:MM."""
+        minutes = sum(
+            int(t.split(":")[0]) * 60 + int(t.split(":")[1])
+            for t in times
+        )
+        avg_minutes = minutes // len(times)
+        hh, mm = divmod(avg_minutes, 60)
+        return f"{hh:02d}:{mm:02d}"
+
     def time_converter(self, hours: float | None) -> str:
+        """Конвертирует часы в строку формата HH:MM."""
         if hours is None:
             return "0"
         hh, mm = divmod(int(hours * 60), 60)
@@ -72,11 +129,13 @@ class XlsxWorkControl(ReportRenderer):
         idx: int | None = None,
         role: str | None = None
     ) -> tuple[int, list[list[str]]]:
+        """Формирует структуру данных для ячеек отчета."""
         enable = (
-            col_data and 
-            role and 
-            col_data.get("work_hours", [])[0] and 
-            idx is not None
+            col_data is not None
+            and role is not None
+            and idx is not None
+            and col_data.get("work_hours")
+            and col_data["work_hours"][0] is not None
         )
         plant = col_data['plant_name'][idx] if enable else None
         stickers = col_data['montage'][idx] if enable else None
@@ -100,22 +159,36 @@ class XlsxWorkControl(ReportRenderer):
             ["Ошибки:", ""],
         ]
         return len(value), value
-    
-        
+
+    def fill_summary_analytics(self, full_name: str, value: list[str], col_idx: int) -> None:
+        """Накапливает данные для аналитической справки по инспектору."""
+        if col_idx % 2 == 0:
+            if self.summary_analytics.get(full_name):
+                if self.summary_analytics[full_name].get(value[0]):
+                    self.summary_analytics[full_name][value[0]].append(value[1])
+                else:
+                    self.summary_analytics[full_name].update({value[0]: [value[1]]})
+            else:
+                self.summary_analytics[full_name] = {}
+                self.summary_analytics[full_name].update({value[0]: [value[1]]})
+
     def render_xlsx(self, report: Report, params: Dict[str, Any]) -> bytes:
+        """Генерирует XLSX с фактическим учетом работы и аналитической справкой."""
         
         if not self.query_results.get("data"):
             raise ValueError("Нет данных для формирования документа в указанный период")
 
-        #print(f"RESULT: {self.query_results}") # development
+        self.summary_analytics = {}
 
         try:
             # Открываем шаблон
             wb = Workbook()
-            # Получаем активный лист
-            sheet = wb.active
-            # Называем лист
-            sheet.title = "Фактический учет работы"
+            # Удаляем лист по умолчанию
+            wb.remove(wb.active)
+            # Создаем первый лист
+            wb.create_sheet("Фактический учет работы")
+            # Получаем первый лист
+            sheet = wb["Фактический учет работы"]
             
             # Задаем стили
             sd = Side(style="thin")
@@ -170,8 +243,8 @@ class XlsxWorkControl(ReportRenderer):
                 row=2, 
                 column=1, 
                 value=(
-                    f"Интервал отчета: {template_renderer.add_day_parser(params['period_start'], 0)} - "
-                    f"{template_renderer.add_day_parser(params['period_end'], 0)}"
+                    f"Интервал отчета: {params['period_start'].strftime('%d.%m.%Y')} - "
+                    f"{params['period_end'].strftime('%d.%m.%Y')}"
                 )
             )
             cell.style = base_cell
@@ -237,16 +310,14 @@ class XlsxWorkControl(ReportRenderer):
                 for _ in range(repeat)
             ]
 
-            # Формируем таблицу
+            # Формируем таблицу Учет работы
             counter = 0
             merge_dict = {}
             for row_idx, row_data in enumerate(rep_inspectors, start=start_row):
-
                 if (counter == repeat):
                     counter = 0
                 current_row = row_idx - start_row + 1
                 # Заполняем строку: индекс row_idx соответствует next row
-                sheet.row_dimensions[row_idx].height = None
                 for col_idx, col_data in enumerate(extended_data, start=1):
                     # установка значений
                     if col_idx == 1:
@@ -272,6 +343,7 @@ class XlsxWorkControl(ReportRenderer):
                                 column=col_idx, 
                                 value=value[counter][pos]
                             )
+                            self.fill_summary_analytics(row_data["full_name"], value[counter], col_idx)
                         except ValueError:
                             success = False
                             for idx, elem in enumerate(col_data["full_names_minor"]):
@@ -286,6 +358,7 @@ class XlsxWorkControl(ReportRenderer):
                                         column=col_idx, 
                                         value=value[counter][pos]
                                     )
+                                    self.fill_summary_analytics(row_data["full_name"], value[counter], col_idx)
                                     success = True
                                     break
                                 except ValueError:
@@ -314,6 +387,64 @@ class XlsxWorkControl(ReportRenderer):
             
             # Добавляем пустую строку
             sheet.append([None] * sheet.max_column)
+
+            # Начинаем делать аналитическую справку
+            wb.create_sheet("Аналитическая справка")
+            sheet1 = wb["Аналитическая справка"]
+
+            # Заголовок документа
+            cell = sheet1.cell(
+                row=1, 
+                column=4, 
+                value="Аналитическая справка"
+            )
+            cell.style = notice_cell
+            dts = params["period_start"]
+            dte = params["period_end"]
+            cell = sheet1.cell(
+                row=2, 
+                column=3, 
+                value=(
+                    "еженедельного выполнения работ за период с "
+                    f"{dts.strftime('%d.%m.%Y')} ({self.WEEKDAYS[dts.weekday()]}) по "
+                    f"{dte.strftime('%d.%m.%Y')} ({self.WEEKDAYS[dte.weekday()]})"
+                )
+            )
+            cell.style = notice_cell
+            
+            header_row = sheet1.max_row + 2
+
+            # Задаем шапку таблицы
+            for idx, data in enumerate(self.header_analitycs, start=1):
+                cell = sheet1.cell(
+                    row = header_row, 
+                    column = idx, 
+                    value = data[0]
+                )
+                cell.style = table_cell
+                cell.font = bold_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            # Задаем ширину ячеек
+            max_cols = len(self.header_analitycs)
+            for i in range(1, max_cols + 1):
+                col_letter = get_column_letter(i)
+                sheet1.column_dimensions[col_letter].width = self.header_analitycs[i - 1][1]
+
+            # Формируем таблицу Аналитическая справка
+            start_row = sheet1.max_row + 1
+            for key, value in self.summary_analytics.items():
+                for idx, item in enumerate(self.header_analitycs, start=1):
+                    if idx == 1:
+                        cell_obj = sheet1.cell(row=start_row, column=idx, value=(start_row - header_row))
+                    if idx == 2:
+                        cell_obj = sheet1.cell(row=start_row, column=idx, value=key)
+                    if idx > 2:
+                        cell_data =  self.cell_calculator(item[2], value)
+                        cell_obj = sheet1.cell(row=start_row, column=idx, value=cell_data)
+                    cell_obj.style = table_cell
+                    cell_obj.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                start_row += 1
               
             # Сохраняем изменения
             with NamedTemporaryFile() as tmp:
