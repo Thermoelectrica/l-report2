@@ -275,9 +275,10 @@ class DocxTplRenderer(ReportRenderer):
                     width, height = img.size
                     exif_data = img.getexif()  # Извлекаем EXIF
 
-                    # условие для камер пирометров 
+                    # условие для камер тепловизоров 
                     # модели FLIR E6xt Wifi (320 x 240) и FLIR E95 (640 x 480)
-                    if height in [240, 480]:
+                    # указываем ширину и высоту, возможно камеру повернули на 90 град.
+                    if height in [240, 320, 480, 640]:
                         new_width = 511 # это пиксели для 67мм (72x72 dpi)
                         new_height = int(height * (new_width / width))
                         img = img.resize((new_width, new_height), Image.BICUBIC)
