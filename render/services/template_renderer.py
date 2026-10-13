@@ -208,12 +208,11 @@ class TemplateRenderer:
             подставляет должность по умолчанию, если она не указана. """
         seen_minors = {}
         for item in data:
-            for idx, elem in enumerate(item.get("full_names_minor") or []):
-                seen_minors.update(
-                    {
-                        elem: item.get("positions_minor", [])[idx] or "Инженер теплового контроля"
-                    }
-                )
+            full_names = item.get("full_names_minor") or []
+            positions = item.get("positions_minor") or []
+            for idx, elem in enumerate(full_names):
+                position = positions[idx] if idx < len(positions) else "Инженер теплового контроля"
+                seen_minors[elem] = position or "Инженер теплового контроля"
         return seen_minors
 
     def _create_environment(self, report: Report) -> Environment:

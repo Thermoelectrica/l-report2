@@ -281,14 +281,16 @@ def report_details_panel() -> rx.Component:
 def index() -> rx.Component:
     """Main page with two-column layout."""
     return rx.container(
-        rx.color_mode.button(position="top-right"),
+        rx.box(
+            rx.color_mode.button(position="top-right", top="1rem"),
+        ),
         rx.vstack(
             # Header with user info and logout
             rx.hstack(
                 rx.vstack(
-                    rx.heading("PDF Report Generator", size="8"),
+                    rx.heading("Генератор отчетов", size="8"),
                     rx.text(
-                        "Select a report and configure parameters to generate PDF",
+                        "Выберите отчет и введите параметры для создания документа",
                         size="3",
                         color="gray",
                     ),

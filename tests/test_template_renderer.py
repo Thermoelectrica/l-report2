@@ -210,3 +210,244 @@ class TestTemplateRenderer:
         assert self.renderer.to_nearest_ten(25) == 20
         assert self.renderer.to_nearest_ten(9) == 0
         assert self.renderer.to_nearest_ten(10) == 10
+
+    # ─── inspector_major_parser ────────────────────────────────────────
+
+    def _make_inspector_data(self, entries: list[dict]) -> list[dict]:
+        """Создаёт список инспекторов для тестов."""
+        return entries
+
+    # 1. Базовый случай: один инспектор с должностью
+    def test_single_inspector_with_position(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert result == {"Иванов И.И.": "Начальник отдела"}
+
+    # 2. Несколько разных инспекторов
+    def test_multiple_different_inspectors(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+            {"full_name_major": "Петров П.П.", "position_major": "Ведущий инженер"},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert len(result) == 2
+        assert result["Иванов И.И."] == "Начальник отдела"
+        assert result["Петров П.П."] == "Ведущий инженер"
+
+    # 3. Дубликаты: оставляется последнее вхождение
+    def test_duplicates_keeps_last(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Инженер"},
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert result == {"Иванов И.И.": "Начальник отдела"}
+
+    # 4. position_major отсутствует → подставляется должность по умолчанию
+    def test_missing_position_uses_default(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И."},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert result == {"Иванов И.И.": "Инженер теплового контроля"}
+
+    # 5. position_major = None → подставляется должность по умолчанию
+    def test_none_position_uses_default(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И.", "position_major": None},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert result == {"Иванов И.И.": "Инженер теплового контроля"}
+
+    # 6. empty string position_major → подставляется должность по умолчанию
+    def test_empty_string_position_uses_default(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И.", "position_major": ""},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert result == {"Иванов И.И.": "Инженер теплового контроля"}
+
+    # 7. empty list → пустой результат
+    def test_empty_list_returns_empty_dict(self):
+        result = self.renderer.inspector_major_parser([])
+        assert result == {}
+
+    # 8. full_name_major отсутствует → элемент пропускается
+    def test_missing_full_name_major_skipped(self):
+        data = self._make_inspector_data([
+            {"position_major": "Начальник"},
+            {"full_name_major": "Петров П.П.", "position_major": "Инженер"},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert len(result) == 1
+        assert "Петров П.П." in result
+
+    # 9. full_name_major = None → элемент пропускается
+    def test_none_full_name_major_skipped(self):
+        data = self._make_inspector_data([
+            {"full_name_major": None, "position_major": "Начальник"},
+            {"full_name_major": "Петров П.П.", "position_major": "Инженер"},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert len(result) == 1
+        assert "Петров П.П." in result
+
+    # 10. Смешанные данные: дубликаты, пустые должности, разные имена
+    def test_mixed_data(self):
+        data = self._make_inspector_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Инженер"},
+            {"full_name_major": "Петров П.П."},
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+            {"full_name_major": "Сидоров С.С.", "position_major": None},
+        ])
+        result = self.renderer.inspector_major_parser(data)
+        assert len(result) == 3
+        assert result["Иванов И.И."] == "Начальник отдела"
+        assert result["Петров П.П."] == "Инженер теплового контроля"
+        assert result["Сидоров С.С."] == "Инженер теплового контроля"
+
+    # ─── inspector_minor_parser ────────────────────────────────────────
+
+    def _make_minor_data(self, entries: list[dict]) -> list[dict]:
+        """Создаёт список младших инспекторов для тестов."""
+        return entries
+
+    # 1. Один элемент с одним именем и должностью
+    def test_single_name_single_position(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Начальник отдела"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {"Иванов И.И.": "Начальник отдела"}
+
+    # 2. Один элемент с несколькими именами и должностями
+    def test_multiple_names_in_one_item(self):
+        data = self._make_minor_data([
+            {
+                "full_names_minor": ["Иванов И.И.", "Петров П.П."],
+                "positions_minor": ["Инженер", "Ведущий инженер"],
+            },
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 2
+        assert result["Иванов И.И."] == "Инженер"
+        assert result["Петров П.П."] == "Ведущий инженер"
+
+    # 3. Несколько элементов с разными именами
+    def test_multiple_items_different_names(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Инженер"]},
+            {"full_names_minor": ["Петров П.П."], "positions_minor": ["Ведущий инженер"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 2
+        assert result["Иванов И.И."] == "Инженер"
+        assert result["Петров П.П."] == "Ведущий инженер"
+
+    # 4. Несколько элементов с пересечением имён (дубликаты, последнее вхождение)
+    def test_duplicates_keeps_last_minor(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Инженер"]},
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Начальник отдела"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {"Иванов И.И.": "Начальник отдела"}
+
+    # 5. Несколько имён в одном элементе + дубликаты между элементами
+    def test_multiple_names_with_duplicates_across_items(self):
+        data = self._make_minor_data([
+            {
+                "full_names_minor": ["Иванов И.И.", "Петров П.П."],
+                "positions_minor": ["Инженер", "Ведущий инженер"],
+            },
+            {"full_names_minor": ["Сидоров С.С."], "positions_minor": ["Начальник отдела"]},
+            {"full_names_minor": ["Петров П.П."], "positions_minor": ["Заместитель"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 3
+        assert result["Иванов И.И."] == "Инженер"
+        assert result["Петров П.П."] == "Заместитель"  # последнее вхождение
+        assert result["Сидоров С.С."] == "Начальник отдела"
+
+    # 6. positions_minor = None → подставляется должность по умолчанию
+    def test_none_position_uses_default_minor(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": [None]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {"Иванов И.И.": "Инженер теплового контроля"}
+
+    # 7. positions_minor = [""] (пустая строка) → подставляется должность по умолчанию
+    def test_empty_string_position_uses_default_minor(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": [""]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {"Иванов И.И.": "Инженер теплового контроля"}
+
+    # 8. positions_minor короче full_names_minor → подставляется должность по умолчанию
+    def test_positions_shorter_than_names_uses_default(self):
+        data = self._make_minor_data([
+            {
+                "full_names_minor": ["Иванов И.И.", "Петров П.П.", "Сидоров С.С."],
+                "positions_minor": ["Инженер"],
+            },
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 3
+        assert result["Иванов И.И."] == "Инженер"
+        assert result["Петров П.П."] == "Инженер теплового контроля"
+        assert result["Сидоров С.С."] == "Инженер теплового контроля"
+
+    # 9. full_names_minor отсутствует → элемент пропускается
+    def test_missing_full_names_minor_skipped(self):
+        data = self._make_minor_data([
+            {"positions_minor": ["Инженер"]},
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Начальник"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 1
+        assert "Иванов И.И." in result
+
+    # 10. full_names_minor = None → элемент пропускается
+    def test_none_full_names_minor_skipped(self):
+        data = self._make_minor_data([
+            {"full_names_minor": None, "positions_minor": ["Инженер"]},
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Начальник"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 1
+        assert "Иванов И.И." in result
+
+    # 11. positions_minor отсутствует → подставляется должность по умолчанию
+    def test_missing_positions_minor_uses_default(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И."]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {"Иванов И.И.": "Инженер теплового контроля"}
+
+    # 12. empty list → пустой результат
+    def test_empty_list_returns_empty_dict_minor(self):
+        result = self.renderer.inspector_minor_parser([])
+        assert result == {}
+
+    # 13. Смешанные данные: все случаи вместе
+    def test_mixed_data_minor(self):
+        data = self._make_minor_data([
+            {
+                "full_names_minor": ["Иванов И.И.", "Петров П.П."],
+                "positions_minor": ["Инженер", None],
+            },
+            {"full_names_minor": ["Иванов И.И."], "positions_minor": ["Начальник отдела"]},
+            {"full_names_minor": ["Сидоров С.С."], "positions_minor": [""]},
+            {"full_names_minor": ["Козлов К.К."]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 4
+        assert result["Иванов И.И."] == "Начальник отдела"  # последнее вхождение
+        assert result["Петров П.П."] == "Инженер теплового контроля"  # None → дефолт
+        assert result["Сидоров С.С."] == "Инженер теплового контроля"  # "" → дефолт
+        assert result["Козлов К.К."] == "Инженер теплового контроля"  # нет positions_minor → дефолт
