@@ -180,9 +180,9 @@ class DocxTplRenderer(ReportRenderer):
             elif (
                 row["equipment_type_name"] != "Ячейка КРУ 6-10 кВ" and 0 < max_excess < 30 or
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and 70 <= max_excess < 80 or
-                is_test_ready and delta_t >= t_excess or
-                current06_cond and (excess_temp_to_current >= t_excess) or
-                current03_cond and (excess_temp_to_half_current >= t_excess) or
+                is_test_ready and t_excess != 0 and delta_t >= t_excess or
+                current06_cond and t_excess != 0 and (excess_temp_to_current >= t_excess) or
+                current03_cond and t_excess != 0 and (excess_temp_to_half_current >= t_excess) or
                 current03_cond and ((excess_temp_to_half_current - 30) >= 0) or
                 current00_cond and delta_t >= 10 or
                 is_test_ready is False and (t_sticker_min - t_max >= 0) or
@@ -194,9 +194,9 @@ class DocxTplRenderer(ReportRenderer):
                         f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
                         f" DEBUG1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and 0 < max_excess < 30}"
                         f" DEBUG2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and 70 <= max_excess < 80}"
-                        f" DEBUG3: {is_test_ready and delta_t >= t_excess}"
-                        f" DEBUG4: {current06_cond and (excess_temp_to_current >= t_excess)}"
-                        f" DEBUG5: {current03_cond and (excess_temp_to_half_current >= t_excess)}"
+                        f" DEBUG3: {is_test_ready and t_excess != 0 and delta_t >= t_excess}"
+                        f" DEBUG4: {current06_cond and t_excess != 0 and (excess_temp_to_current >= t_excess)}"
+                        f" DEBUG5: {current03_cond and t_excess != 0 and (excess_temp_to_half_current >= t_excess)}"
                         f" DEBUG6: {current03_cond and ((excess_temp_to_half_current - 30) >= 0)}"
                         f" DEBUG7: {current00_cond and delta_t >= 10}"
                         f" DEBUG8: {is_test_ready is False and (t_sticker_min - t_max >= 0)}"

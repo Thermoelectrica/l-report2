@@ -451,3 +451,88 @@ class TestTemplateRenderer:
         assert result["Петров П.П."] == "Инженер теплового контроля"  # None → дефолт
         assert result["Сидоров С.С."] == "Инженер теплового контроля"  # "" → дефолт
         assert result["Козлов К.К."] == "Инженер теплового контроля"  # нет positions_minor → дефолт
+
+    # 14. Имя из minor уже есть в major → исключается из seen_minors
+    def test_minor_excluded_if_in_major(self):
+        data = self._make_minor_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+            {"full_names_minor": ["Иванов И.И.", "Петров П.П."], "positions_minor": ["Инженер", "Ведущий инженер"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert "Иванов И.И." not in result
+        assert result["Петров П.П."] == "Ведущий инженер"
+
+    # 15. Все имена из minor уже есть в major → пустой результат
+    def test_all_minors_excluded_when_in_major(self):
+        data = self._make_minor_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник"},
+            {"full_name_major": "Петров П.П.", "position_major": "Ведущий инженер"},
+            {"full_names_minor": ["Иванов И.И.", "Петров П.П."], "positions_minor": ["Инженер", "Старший инженер"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {}
+
+    # 16. Частичное перекрытие: часть имён в major, часть нет
+    def test_partial_overlap_major_and_minor(self):
+        data = self._make_minor_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+            {"full_name_major": "Петров П.П.", "position_major": "Ведущий инженер"},
+            {
+                "full_names_minor": ["Иванов И.И.", "Петров П.П.", "Сидоров С.С."],
+                "positions_minor": ["Инженер", "Старший инженер", "Младший инженер"],
+            },
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 1
+        assert "Иванов И.И." not in result
+        assert "Петров П.П." not in result
+        assert result["Сидоров С.С."] == "Младший инженер"
+
+    # 17. Дубликат имени в minor: первое вхождение есть в major → второе вхождение тоже исключается
+    def test_duplicate_minor_excluded_if_in_major(self):
+        data = self._make_minor_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник"},
+            {
+                "full_names_minor": ["Иванов И.И.", "Петров П.П.", "Иванов И.И."],
+                "positions_minor": ["Инженер", "Ведущий инженер", "Старший инженер"],
+            },
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert "Иванов И.И." not in result
+        assert result["Петров П.П."] == "Ведущий инженер"
+
+    # 18. Пустой major, minor есть → все включаются
+    def test_empty_major_all_minors_included(self):
+        data = self._make_minor_data([
+            {"full_names_minor": ["Иванов И.И.", "Петров П.П."], "positions_minor": ["Инженер", "Ведущий инженер"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 2
+        assert result["Иванов И.И."] == "Инженер"
+        assert result["Петров П.П."] == "Ведущий инженер"
+
+    # 19. Пустой minor, major есть → minor пустой
+    def test_empty_minor_all_excluded(self):
+        data = self._make_minor_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник"},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert result == {}
+
+    # 20. Смешанные данные: перекрытие, дубликаты, пустые должности
+    def test_mixed_data_with_major_overlap(self):
+        data = self._make_minor_data([
+            {"full_name_major": "Иванов И.И.", "position_major": "Начальник отдела"},
+            {"full_name_major": "Петров П.П.", "position_major": "Ведущий инженер"},
+            {
+                "full_names_minor": ["Иванов И.И.", "Сидоров С.С.", "Петров П.П."],
+                "positions_minor": ["Инженер", None, ""],
+            },
+            {"full_names_minor": ["Козлов К.К."], "positions_minor": ["Младший инженер"]},
+        ])
+        result = self.renderer.inspector_minor_parser(data)
+        assert len(result) == 2
+        assert "Иванов И.И." not in result  # в major
+        assert "Петров П.П." not in result  # в major
+        assert result["Сидоров С.С."] == "Инженер теплового контроля"  # None → дефолт
+        assert result["Козлов К.К."] == "Младший инженер"
