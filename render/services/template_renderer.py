@@ -206,11 +206,14 @@ class TemplateRenderer:
         """ Преобразует список младших инспекторов в словарь «имя → должность».
             Убирает дубликаты по full_names_minor (оставляется последнее вхождение),
             подставляет должность по умолчанию, если она не указана. """
+        seen_major = self.inspector_major_parser(data=data)
         seen_minors = {}
         for item in data:
             full_names = item.get("full_names_minor") or []
             positions = item.get("positions_minor") or []
             for idx, elem in enumerate(full_names):
+                if elem in seen_major:
+                    continue
                 position = positions[idx] if idx < len(positions) else "Инженер теплового контроля"
                 seen_minors[elem] = position or "Инженер теплового контроля"
         return seen_minors
