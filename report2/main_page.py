@@ -6,6 +6,8 @@ from render.models import ParameterType
 from report2.main.main_state import State
 from report2.models import ParamInfo
 
+EXCLUDE_REPORT = "Протокол теплового контроля"
+
 
 def report_list_item(report: Dict[str, str]) -> rx.Component:
     """Render a single report list item."""
@@ -200,17 +202,21 @@ def report_details_panel() -> rx.Component:
                     ),
                     # Action buttons
                     rx.hstack(
-                        rx.button(
-                            "Preview",
-                            type="submit",
-                            on_click=State.set_preview_mode,
-                            disabled=State.is_rendering,
-                            size="3",
-                            variant="soft",
-                            flex="1",
+                        rx.cond(
+                            State.selected_report_name == EXCLUDE_REPORT,
+                            rx.button(
+                                "Просмотр",
+                                type="submit",
+                                on_click=State.set_preview_mode,
+                                disabled=State.is_rendering,
+                                size="3",
+                                variant="soft",
+                                flex="1",
+                            ),
+                            rx.fragment(),
                         ),
                         rx.button(
-                            "Generate",
+                            "Создать",
                             type="submit",
                             disabled=State.is_rendering,
                             loading=State.is_rendering,
@@ -218,7 +224,12 @@ def report_details_panel() -> rx.Component:
                             flex="1",
                         ),
                         spacing="3",
-                        width="100%",
+                        width=rx.cond(
+                            State.selected_report_name == EXCLUDE_REPORT,
+                            "100%",
+                            "60%",
+                        ),
+                        margin="0 auto",
                     ),
                     spacing="4",
                     width="100%",
