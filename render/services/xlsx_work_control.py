@@ -135,7 +135,7 @@ class XlsxWorkControl(ReportRenderer):
             and role is not None
             and idx is not None
             and col_data.get("work_hours")
-            and col_data["work_hours"][0] is not None
+            and col_data["work_hours"][idx] is not None
         )
         plant = col_data['plant_name'][idx] if enable else None
         stickers = col_data['montage'][idx] if enable else None
