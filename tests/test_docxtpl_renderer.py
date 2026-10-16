@@ -522,4 +522,148 @@ class TestDefectSummary:
         result = renderer.defect_summary(row)
         # t_sticker_min = 0 → берётся t_sticker_parser(None) → 0 → fallback t_max
         assert result["defect_weight"] == 6
+
+
+# =========================
+# Тесты duplicate_finder
+# =========================
+
+class TestDuplicateFinder:
+    """Тесты метода duplicate_finder."""
+
+    @pytest.fixture
+    def renderer(self):
+        r = DocxTplRenderer()
+        return r
+
+    def _make_data(self, entries: list[dict]) -> dict:
+        """Создаёт query_results с заданными записями."""
+        return {"data": entries}
+
+    # 1. Нет дубликатов — ничего не меняется
+    def test_no_duplicates_no_changes(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1},
+            {"unit_name": "B", "full_equipment_name": "EQ2", "started_at": 2},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        assert "skip_case" not in data["data"][0]
+        assert "skip_case" not in data["data"][1]
+        for row in data["data"]:
+            assert not any(k.startswith("history_") for k in row)
+
+    # 2. Один дубликат — маркировка и перенос в историю
+    def test_one_duplicate_marks_skip_and_history(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 2, "detected_at": "2026-01-02", "t_sticker": 50, "t_observed": 60, "t_environment": 20, "t_excess": 10},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1, "detected_at": "2026-01-01", "t_sticker": 40, "t_observed": 50, "t_environment": 15, "t_excess": 5},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        # started_at=1 (индекс 1) — ранний → skip_case
+        assert data["data"][1]["skip_case"] is True
+        # started_at=2 (индекс 0) — поздний → history
+        assert data["data"][0]["history_t_sticker"] == [40]
+        assert data["data"][0]["history_t_observed"] == [50]
+
+    # 3. Несколько дубликатов — все индексы в bucket
+    def test_multiple_duplicates_all_indices_in_bucket(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1, "detected_at": "2026-01-01", "t_sticker": 30, "t_observed": 40, "t_environment": 10, "t_excess": 5},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 2, "detected_at": "2026-01-02", "t_sticker": 40, "t_observed": 50, "t_environment": 15, "t_excess": 8},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 3, "detected_at": "2026-01-03", "t_sticker": 50, "t_observed": 60, "t_environment": 20, "t_excess": 10},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        # started_at=2 (idx 1) — ранний (последний bucket перезаписал) → skip_case
+        assert data["data"][1]["skip_case"] is True
+        # started_at=3 (idx 2) — поздний → history из idx 1 (второй bucket перезаписал)
+        assert data["data"][2]["history_t_sticker"] == [40]
+
+    # 4. Разные unit_name — не считаются дубликатами
+    def test_different_unit_name_not_duplicates(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1},
+            {"unit_name": "B", "full_equipment_name": "EQ1", "started_at": 2},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        for row in data["data"]:
+            assert "skip_case" not in row
+            assert not any(k.startswith("history_") for k in row)
+
+    # 5. Разные full_equipment_name — не считаются дубликатами
+    def test_different_equipment_not_duplicates(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1},
+            {"unit_name": "A", "full_equipment_name": "EQ2", "started_at": 2},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        for row in data["data"]:
+            assert "skip_case" not in row
+            assert not any(k.startswith("history_") for k in row)
+
+    # 6. Несколько групп дубликатов
+    def test_multiple_duplicate_groups(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 2, "detected_at": "2026-01-02", "t_sticker": 60, "t_observed": 70, "t_environment": 20, "t_excess": 10},
+            {"unit_name": "B", "full_equipment_name": "EQ2", "started_at": 4, "detected_at": "2026-01-04", "t_sticker": 80, "t_observed": 90, "t_environment": 25, "t_excess": 15},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1, "detected_at": "2026-01-01", "t_sticker": 50, "t_observed": 60, "t_environment": 15, "t_excess": 8},
+            {"unit_name": "B", "full_equipment_name": "EQ2", "started_at": 3, "detected_at": "2026-01-03", "t_sticker": 70, "t_observed": 80, "t_environment": 22, "t_excess": 12},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        # A: started_at=1 (idx 2) → skip, started_at=2 (idx 0) → history
+        assert data["data"][2]["skip_case"] is True
+        assert data["data"][0]["history_t_sticker"] == [50]
+        # B: started_at=3 (idx 3) → skip, started_at=4 (idx 1) → history
+        assert data["data"][3]["skip_case"] is True
+        assert data["data"][1]["history_t_sticker"] == [70]
+
+    # 7. Один элемент — нет дубликатов
+    def test_single_element_no_duplicates(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        assert "skip_case" not in data["data"][0]
+
+    # 8. Пустой список — без ошибок
+    def test_empty_data_no_errors(self, renderer):
+        data = self._make_data([])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        assert data["data"] == []
+
+    # 9. Проверяет все поля для history
+    def test_all_history_fields_copied(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 2,
+             "unit_name_val": "un_A", "detected_at": "2026-01-02",
+             "t_sticker": 60, "t_observed": 70, "t_environment": 25, "t_excess": 15},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1,
+             "unit_name_val": "un_B", "detected_at": "2026-01-01",
+             "t_sticker": 50, "t_observed": 60, "t_environment": 20, "t_excess": 10},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        for name in ["unit_name", "detected_at", "t_sticker", "t_observed", "t_environment", "t_excess"]:
+            assert data["data"][0][f"history_{name}"] == [data["data"][1][name]]
+
+    # 10. started_at сортировка: убывание (последний по дате — без skip_case)
+    def test_sorting_reverse_by_started_at(self, renderer):
+        data = self._make_data([
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 3, "detected_at": "2026-01-03", "t_sticker": 70, "t_observed": 80, "t_environment": 25, "t_excess": 15},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 1, "detected_at": "2026-01-01", "t_sticker": 50, "t_observed": 60, "t_environment": 15, "t_excess": 8},
+            {"unit_name": "A", "full_equipment_name": "EQ1", "started_at": 2, "detected_at": "2026-01-02", "t_sticker": 60, "t_observed": 70, "t_environment": 20, "t_excess": 10},
+        ])
+        renderer.query_results = data
+        renderer.duplicate_finder()
+        # started_at=1 (idx 1) — ранний → skip_case
+        assert data["data"][1]["skip_case"] is True
+        # started_at=3 (idx 0) — поздний → history
+        assert data["data"][0]["history_t_sticker"] == [50]
             

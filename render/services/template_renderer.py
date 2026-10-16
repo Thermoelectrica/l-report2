@@ -106,14 +106,14 @@ class TemplateRenderer:
         оборудования. Определяет, развивается ли дефект или устранён.
         """
         try:
-            unit_names = row.get("history_unit_names", [])
+            unit_names = row.get("history_unit_name", [])
             unit_name = row.get("unit_name")
             idx = unit_names.index(unit_name)
         except (ValueError, TypeError):
             raise ValueError(f"The unit '{row.get('unit_name')}' is not in the list.")
 
         past = (
-            f"Осмотр {self.add_day_parser(row['history_unit_detected_at'][idx], 0)} "
+            f"Осмотр {self.add_day_parser(row['history_detected_at'][idx], 0)} "
             f"- регистрация дефекта."
         )
 
@@ -125,7 +125,7 @@ class TemplateRenderer:
             return (past + "\n\n" + present)
 
         history_t_observed = self.extract_item(row.get("history_t_observed"), idx)
-        history_t_sticker = self.extract_item(row.get("history_t_stickers"), idx)
+        history_t_sticker = self.extract_item(row.get("history_t_sticker"), idx)
         history_t_excess = self.extract_item(row.get("history_t_excess"), idx)
         history_t_environment = self.extract_item(row.get("history_t_environment"), idx)
         history_t_max = max(history_t_sticker, history_t_observed)

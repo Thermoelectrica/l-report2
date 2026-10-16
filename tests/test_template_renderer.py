@@ -40,10 +40,10 @@ class TestTemplateRenderer:
         """Создаёт стандартный row с дефолтными значениями."""
         base = {
             "unit_name": "РУ-0,4 кВ",
-            "history_unit_names": ["РУ-0,4 кВ", "Щит-1"],
-            "history_unit_detected_at": [datetime(2026, 1, 15), datetime(2026, 2, 10)],
+            "history_unit_name": ["РУ-0,4 кВ", "Щит-1"],
+            "history_detected_at": [datetime(2026, 1, 15), datetime(2026, 2, 10)],
             "history_t_observed": [45.0, 50.0],
-            "history_t_stickers": [">100", "80"],
+            "history_t_sticker": [">100", "80"],
             "history_t_excess": [10.0, 12.0],
             "history_t_environment": [20.0, 22.0],
             "defect_status": "DETECTED",
@@ -83,7 +83,7 @@ class TestTemplateRenderer:
             t_sticker=">120",
             t_observed=55.0,
             history_t_observed=[45.0],
-            history_t_stickers=[">100"],
+            history_t_sticker=[">100"],
         )
         result = self.renderer.history_inspection_parser(row)
         assert "развитие дефекта" in result
@@ -96,7 +96,7 @@ class TestTemplateRenderer:
         # 120 - 80 = 40 > 10 → срабатывает cond_two
         row = self._make_row(
             history_t_observed=[],
-            history_t_stickers=["80"],
+            history_t_sticker=["80"],
             t_sticker=">120",
             t_observed=0,
         )
@@ -112,7 +112,7 @@ class TestTemplateRenderer:
             t_sticker=">50",
             t_observed=30.0,
             history_t_observed=[25.0],
-            history_t_stickers=[">40"],
+            history_t_sticker=[">40"],
         )
         result = self.renderer.history_inspection_parser(row)
         assert "дефект не устранен" in result
@@ -127,7 +127,7 @@ class TestTemplateRenderer:
             t_sticker=">50",
             t_observed=55.0,
             history_t_observed=[45.0],
-            history_t_stickers=[">40"],
+            history_t_sticker=[">40"],
             history_t_excess=[10.0],
             history_t_environment=[20.0],
             t_excess=15.0,
@@ -147,7 +147,7 @@ class TestTemplateRenderer:
             t_sticker=">50",
             t_observed=60.0,
             history_t_observed=[30],
-            history_t_stickers=[">80"],
+            history_t_sticker=[">80"],
             history_t_environment=[20.0],
             history_t_excess=[10.0],
             t_environment=20.0,
@@ -169,12 +169,12 @@ class TestTemplateRenderer:
 
     # 9. Несколько единиц в истории — выбирается по unit_name
     def test_selects_correct_index_from_history(self):
-        # history_unit_names = ["РУ-0,4 кВ", "Щит-1"], unit_name = "Щит-1" → idx=1
+        # history_unit_name = ["РУ-0,4 кВ", "Щит-1"], unit_name = "Щит-1" → idx=1
         row = self._make_row(
             unit_name="Щит-1",
-            history_unit_names=["РУ-0,4 кВ", "Щит-1"],
+            history_unit_name=["РУ-0,4 кВ", "Щит-1"],
             history_t_observed=[10.0, 50.0],  # idx=1 → 50
-            history_t_stickers=[">10", ">80"],  # idx=1 → 80
+            history_t_sticker=[">10", ">80"],  # idx=1 → 80
             t_sticker=">120",  # t_max = 120
             t_observed=55.0,  # t_max = 120
             history_t_environment=[5.0, 22.0],  # idx=1 → 22
