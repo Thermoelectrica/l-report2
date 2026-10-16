@@ -50,8 +50,13 @@ class DocxTplRenderer(ReportRenderer):
         """Находит дубликаты по `unit_name` + `full_equipment_name`.
         Сортирует по `started_at` (по убыванию), помечает самый ранний
         дефект `skip_case=True` и копирует его данные в `history_{name}`
-        самого позднего.
+        самого позднего. Делает проверку на наличие ключей с префиксом 
+        `history_`
         """
+        if not self.query_results['data']:
+            return
+        if not any(k.startswith("history_") for k in self.query_results['data'][0]):
+            return
         unit_matches = []
         for idx1, item in enumerate(self.query_results['data']):
             bucket = {idx1}
