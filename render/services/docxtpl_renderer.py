@@ -45,6 +45,46 @@ class DocxTplRenderer(ReportRenderer):
     @property
     def file_extension(self) -> str:
         return "docx"
+
+    def duplicate_finder(self) -> None:
+        """Находит дубликаты по `unit_name` + `full_equipment_name`.
+        Сортирует по `started_at` (по убыванию), помечает самый ранний
+        дефект `skip_case=True` и копирует его данные в `history_{name}`
+        самого позднего.
+        """
+        unit_matches = []
+        for idx1, item in enumerate(self.query_results['data']):
+            bucket = {idx1}
+            for idx2, elem in enumerate(self.query_results['data'][(idx1 + 1):]):
+                if (
+                    item["unit_name"] == elem["unit_name"] and
+                    item["full_equipment_name"] == elem["full_equipment_name"] 
+                ):
+                    bucket.add(idx2 + idx1 + 1)
+            if len(bucket) > 1:
+                unit_matches.append(list(bucket))
+
+        if unit_matches:
+            for units in unit_matches:
+                # Сортируем индексы по дате
+                units.sort(
+                    key=lambda i: self.query_results["data"][i]["started_at"],
+                    reverse=True
+                )
+                # Ранний дефект помечаем для пропуска
+                self.query_results["data"][units[-1]]["skip_case"] = True
+                # Переписываем данные раннего дефекта в историю позднего дефекта
+                for name in [
+                    "unit_name", 
+                    "detected_at", 
+                    "t_sticker", 
+                    "t_observed", 
+                    "t_environment", 
+                    "t_excess"
+                ]:
+                    self.query_results["data"][units[0]][f"history_{name}"] = [
+                        self.query_results["data"][units[-1]][name],
+                    ]
     
     def defect_summary(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """ Определяет группу дефектов на основе методики 2.
@@ -375,10 +415,17 @@ class DocxTplRenderer(ReportRenderer):
 
             if self.DEBUG:
                 print(f"DATA: {self.query_results['data']}")
-            
+
+            # Ищем дубликаты в рамках интервала запроса
+            self.duplicate_finder()
+
             # Расчитываем текстовый вывод по группам дефектов
+            # и делаем другую предобработку
             data_with_summary = []
             for row in self.query_results["data"]:
+                # пропускаем дефекты помеченные для пропуска
+                if row.get("skip_case"):
+                    continue
                 result = self.defect_summary(row)
                 if (
                     not params.get("include_developing") and 
@@ -389,7 +436,8 @@ class DocxTplRenderer(ReportRenderer):
             
             # Сортируем список по весу дефекта
             self.query_results["data"] = sorted(data_with_summary, key=lambda x: x["defect_weight"])
-        
+
+            # Создаем объекты InlineImage 
             for row in self.query_results["data"]:
                 pictures = []
                 image_keys = [ key for key in row.keys() if "image_id" in key ]
