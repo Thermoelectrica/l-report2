@@ -106,6 +106,7 @@ echo -e "${GREEN}✓ Application files copied${NC}"
 # Create necessary directories
 echo -e "${YELLOW}Creating application directories...${NC}"
 mkdir -p "$INSTALL_DIR/uploaded_files"
+mkdir -p "$INSTALL_DIR/pdf_conversion_work"
 mkdir -p "$INSTALL_DIR/.web"
 mkdir -p "$INSTALL_DIR/logs"
 mkdir -p "$INSTALL_DIR/.states"

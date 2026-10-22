@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +21,8 @@ class DocxToPdfConverter:
                              Если None, используется 'libreoffice' из PATH.
         """
         self.libreoffice_path = libreoffice_path or "libreoffice"
+        self.work_dir = Path("/tmp/pdf_conversion_work")
+        self.work_dir.mkdir(exist_ok=True)
 
     async def convert(self, docx_bytes: bytes) -> bytes:
         """
@@ -36,23 +37,30 @@ class DocxToPdfConverter:
         Raises:
             RuntimeError: Если конвертация не удалась.
         """
-        # Создаём временные файлы для конвертации
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
+        # Создаём уникальную папку для каждой конвертации
+        import uuid
+        work_id = str(uuid.uuid4())[:8]
+        work_dir = (self.work_dir / work_id).resolve()  # абсолютный путь
+        work_dir.mkdir()
 
+        try:
             # Записываем DOCX
-            docx_path = tmpdir_path / "input.docx"
+            docx_path = work_dir / "input.docx"
             docx_path.write_bytes(docx_bytes)
 
             # Конвертируем через LibreOffice
             pdf_path = await asyncio.to_thread(
                 self._convert_via_libreoffice,
                 docx_path,
-                tmpdir_path
+                work_dir
             )
 
             # Читаем результат
             return pdf_path.read_bytes()
+        finally:
+            # Удаляем папку после завершения
+            import shutil
+            shutil.rmtree(work_dir, ignore_errors=True)
         
     def _convert_via_libreoffice(self, docx_path: Path, output_dir: Path) -> Path:
         """
