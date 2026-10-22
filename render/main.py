@@ -62,6 +62,7 @@ if __name__ == "__main__":
                 metadata = render_service.getReportMetadata(report_id)
                 print(f"\nMetadata for '{metadata.name}':")
                 print(f"  Description: {metadata.description}")
+                print(f"  Preview: {metadata.preview}")
                 print(f"  Version: {metadata.version}")
                 print(f"  Parameters: {len(metadata.parameters)}")
                 for param in metadata.parameters:

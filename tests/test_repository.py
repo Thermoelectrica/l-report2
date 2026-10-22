@@ -22,6 +22,7 @@ class TestReportRepository:
 name: "Test Report"
 description: "A test report"
 version: "1.0"
+preview: false
 format: "weasyprint"
 timeout: 120
 parameters:
@@ -54,6 +55,7 @@ parameters:
 name: "Sales Report"
 description: "Monthly sales"
 version: "2.0"
+preview: false
 format: "weasyprint"
 parameters:
   - name: month
@@ -120,13 +122,13 @@ parameters:
         # Create first report
         report1 = temp_reports_dir / "report1"
         report1.mkdir()
-        (report1 / "metadata.yaml").write_text("name: Report 1\nformat: weasyprint\n")
+        (report1 / "metadata.yaml").write_text("name: Report 1\npreview: false\nformat: weasyprint\n")
         (report1 / "query.sql").write_text("SELECT 1;")
 
         # Create second report
         report2 = temp_reports_dir / "report2"
         report2.mkdir()
-        (report2 / "metadata.yaml").write_text("name: Report 2\nformat: weasyprint\n")
+        (report2 / "metadata.yaml").write_text("name: Report 2\npreview: false\nformat: weasyprint\n")
         (report2 / "query.sql").write_text("SELECT 2;")
 
         repo = ReportRepository(str(temp_reports_dir))
@@ -141,7 +143,7 @@ parameters:
         # Create initial report
         report_dir = temp_reports_dir / "test-report"
         report_dir.mkdir()
-        (report_dir / "metadata.yaml").write_text("name: Test\nformat: weasyprint\n")
+        (report_dir / "metadata.yaml").write_text("name: Test\npreview: false\nformat: weasyprint\n")
         (report_dir / "query.sql").write_text("SELECT 1;")
 
         repo = ReportRepository(str(temp_reports_dir))
@@ -150,7 +152,7 @@ parameters:
         # Add another report
         report2_dir = temp_reports_dir / "new-report"
         report2_dir.mkdir()
-        (report2_dir / "metadata.yaml").write_text("name: New\nformat: weasyprint\n")
+        (report2_dir / "metadata.yaml").write_text("name: New\npreview: false\nformat: weasyprint\n")
         (report2_dir / "query.sql").write_text("SELECT 2;")
 
         # Reload

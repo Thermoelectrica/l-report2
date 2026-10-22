@@ -92,6 +92,7 @@ class ReportRepository:
                     enum=param.get("enum"),
                     enum_query=param.get("enum_query"),
                     default=param.get("default"),
+                    visibility=param.get("visibility", True)
                 )
             )
 
@@ -99,6 +100,7 @@ class ReportRepository:
             id=report_dir.name,
             name=metadata_dict.get("name", report_dir.name),
             description=metadata_dict.get("description"),
+            preview=metadata_dict.get("preview"),
             version=metadata_dict.get("version", "1.0"),
             format=metadata_dict["format"],  # Required field
             timeout=metadata_dict.get("timeout"),

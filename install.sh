@@ -39,6 +39,17 @@ if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$PYTHON_VERSION" | sort -V | head -n1
 fi
 echo -e "${GREEN}✓ Python $PYTHON_VERSION found${NC}"
 
+# Check if LibreOffice is installed (required for DOCX → PDF conversion)
+echo -e "${YELLOW}Checking LibreOffice...${NC}"
+if ! command -v libreoffice &> /dev/null; then
+    echo -e "${YELLOW}Installing LibreOffice for DOCX → PDF conversion...${NC}"
+    apt-get update
+    apt-get install -y libreoffice-impress
+    echo -e "${GREEN}✓ LibreOffice installed${NC}"
+else
+    echo -e "${GREEN}✓ LibreOffice found${NC}"
+fi
+
 # Check if service user exists, create if not
 echo -e "${YELLOW}Checking service user...${NC}"
 if ! id "$SERVICE_USER" &>/dev/null; then

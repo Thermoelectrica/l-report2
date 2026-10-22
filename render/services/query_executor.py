@@ -124,7 +124,7 @@ class QueryExecutor:
                     from ..models import ReportMetadata
 
                     minimal_metadata = ReportMetadata(
-                        id="enum", name="enum", format="weasyprint", parameters=[]
+                        id="enum", name="enum", preview=True, format="weasyprint", parameters=[]
                     )
                     converted_query, positional_params = (
                         self._convert_named_to_positional(

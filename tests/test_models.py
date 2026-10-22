@@ -90,6 +90,7 @@ class TestReportMetadata:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
         )
         assert metadata.id == "test-report"
@@ -104,6 +105,7 @@ class TestReportMetadata:
             id="sales-report",
             name="Sales Report",
             description="Monthly sales analysis",
+            preview=False,
             version="2.0",
             format="weasyprint",
             timeout=300,
@@ -126,6 +128,7 @@ class TestReportMetadata:
         metadata = ReportMetadata(
             id="test",
             name="Test",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
