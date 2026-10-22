@@ -22,6 +22,7 @@ class State(AuthState):
     selected_report_id: str = ""
     selected_report_name: str = ""
     selected_report_description: str = ""
+    selected_preview: bool = False
     report_parameters: List[ParamInfo] = []
 
     # Render status
@@ -70,6 +71,7 @@ class State(AuthState):
             # Store metadata in separate fields
             self.selected_report_name = metadata.name
             self.selected_report_description = metadata.description or ""
+            self.selected_preview = metadata.preview
 
             # Convert parameters to ParamInfo objects
             self.report_parameters = [
@@ -80,6 +82,7 @@ class State(AuthState):
                     description=p.description or p.name,
                     placeholder=p.placeholder or "",
                     enum_values=p.enum or [],
+                    visibility=getattr(p, "visibility", True),
                     value=str(p.default) if p.default is not None else "",  # Initialize value with default
                 )
                 for p in metadata.parameters
@@ -264,7 +267,7 @@ class State(AuthState):
         for param_def in self.report_parameters:
             param_name = param_def.name
             param_type = param_def.type
-            value_str = form_data.get(param_name, "")
+            value_str = form_data.get(param_name, param_def.value)
 
             # Special handling for boolean - always include it (switch can be on/off)
             if param_type == ParameterType.BOOLEAN.value:

@@ -21,7 +21,7 @@ def _make_executor() -> QueryExecutor:
 
 def _make_metadata(*params: ReportParameter) -> ReportMetadata:
     return ReportMetadata(
-        id="test", name="Test", format="weasyprint", parameters=list(params)
+        id="test", name="Test", format="weasyprint", preview=False, parameters=list(params)
     )
 
 
@@ -163,6 +163,7 @@ class TestGetParameterDependencies:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -186,6 +187,7 @@ class TestGetParameterDependencies:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -215,6 +217,7 @@ class TestGetParameterDependencies:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -250,6 +253,7 @@ class TestGetParameterDependencies:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -296,6 +300,7 @@ class TestRefreshEnumValues:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -343,6 +348,7 @@ class TestRefreshEnumValues:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[]
         )
@@ -369,6 +375,7 @@ class TestRefreshEnumValues:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -401,6 +408,7 @@ class TestRefreshEnumValues:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -446,6 +454,7 @@ class TestGetReportMetadataWithDependencies:
         base_metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -488,6 +497,7 @@ class TestGetReportMetadataWithDependencies:
         base_metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(

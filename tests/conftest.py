@@ -108,6 +108,7 @@ def sample_report_metadata() -> ReportMetadata:
         description="A test report for unit testing",
         version="1.0",
         format="weasyprint",
+        preview=False,
         timeout=60,
         parameters=[
             ReportParameter(
@@ -241,6 +242,7 @@ def mock_report(
 name: "Test Report"
 description: "A test report"
 version: "1.0"
+preview: false
 timeout: 60
 parameters:
   - name: start_date

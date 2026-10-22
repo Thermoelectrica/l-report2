@@ -41,7 +41,7 @@ class XlsxRenderer(ReportRenderer):
         parameters: Dict[str, Any],
         query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str | None:
-        """Отрендерить HTML-превью. Возвращает None, если формат не поддерживает превью."""
+        """Отрендерить HTML-превью."""
         return template_renderer.render(report, parameters, query_results)
 
     @property
@@ -308,15 +308,6 @@ class XlsxRenderer(ReportRenderer):
                     "в Договоре по данному объекту."
                 )
             ).style = notice_cell
-            
-            # Попытка управления разрывами
-            #row_number = 20  # номер строки, перед которой вставить разрыв
-            #sheet.cell(row=current_row + 1, column=2, value=sheet.max_row).style = underline_bold
-            #sheet.page_setup.autoPageBreaks = True
-            #sheet.page_setup.fitToPage = False
-            #page_break = Break(id=sheet.max_row)  # создаём объект разрыва
-            #sheet.row_breaks.append(page_break)  # добавляем разрыв в коллекцию
-            #print("Горизонтальные разрывы: ", sheet.row_breaks, "MAX_ROW: ", sheet.max_row)
 
             sheet.append([None] * sheet.max_column)
             current_row = sheet.max_row + 1

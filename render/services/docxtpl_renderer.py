@@ -32,7 +32,6 @@ class DocxTplRenderer(ReportRenderer):
     def __init__(self):
         self.logoname = "thermoelectrica_logo.png"
         self.file_docx = "album_template_new.docx"
-        self.output_path = Path("./generated_template.docx")
         self.resized_images_store = Path("./resized_images_store")
         self.blank_image = "blank_image"
         self.prefix_name = {0: "visual", 1: "thermal"}
@@ -279,7 +278,7 @@ class DocxTplRenderer(ReportRenderer):
         parameters: Dict[str, Any],
         query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str | None:
-        """Отрендерить HTML-превью. Возвращает None, если формат не поддерживает превью."""
+        """Отрендерить HTML-превью."""
         return template_renderer.render(report, parameters, query_results)
 
     @property
@@ -438,6 +437,9 @@ class DocxTplRenderer(ReportRenderer):
                 ):
                     continue  # пропускаем развивающиеся дефекты
                 data_with_summary.append(result)
+
+            if not data_with_summary:
+                raise ValueError(f"По {params['plant_name']} нет дефектов 1 и 2 группы для показа")
             
             # Сортируем список по весу дефекта
             self.query_results["data"] = sorted(data_with_summary, key=lambda x: x["defect_weight"])
@@ -487,6 +489,8 @@ class DocxTplRenderer(ReportRenderer):
             file_stream = io.BytesIO()
             doc.save(file_stream)
             file_stream.seek(0)
+        except ValueError:
+            raise
         except Exception as exc:
             logger.error(f"DOCX rendering failed: {exc}")
             raise RuntimeError(f"DOCX rendering failed: {exc}")

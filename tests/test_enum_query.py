@@ -84,6 +84,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -124,6 +125,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -165,6 +167,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(
@@ -203,6 +206,7 @@ class TestEnumQuery:
         metadata = ReportMetadata(
             id="test-report",
             name="Test Report",
+            preview=False,
             format="weasyprint",
             parameters=[
                 ReportParameter(

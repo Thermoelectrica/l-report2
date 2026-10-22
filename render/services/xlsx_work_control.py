@@ -72,7 +72,7 @@ class XlsxWorkControl(ReportRenderer):
         parameters: Dict[str, Any],
         query_results: Dict[str, List[Dict[str, Any]]],
     ) -> str | None:
-        """Отрендерить HTML-превью. Возвращает None, если формат не поддерживает превью."""
+        """Отрендерить HTML-превью."""
         return template_renderer.render(report, parameters, query_results)
 
     @property

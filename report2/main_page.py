@@ -6,8 +6,6 @@ from render.models import ParameterType
 from report2.main.main_state import State
 from report2.models import ParamInfo
 
-EXCLUDE_REPORT = "Протокол теплового контроля"
-
 
 def report_list_item(report: Dict[str, str]) -> rx.Component:
     """Render a single report list item."""
@@ -190,9 +188,13 @@ def report_details_panel() -> rx.Component:
                         rx.vstack(
                             rx.foreach(
                                 State.report_parameters,
-                                lambda p: rx.fragment(
-                                    parameter_input(p),
-                                    key=p.name,
+                                lambda p: rx.cond(
+                                    p.visibility,
+                                    rx.fragment(
+                                        parameter_input(p),
+                                        key=p.name,
+                                    ),
+                                    rx.fragment(),
                                 ),
                             ),
                             spacing="4",
@@ -203,7 +205,7 @@ def report_details_panel() -> rx.Component:
                     # Action buttons
                     rx.hstack(
                         rx.cond(
-                            State.selected_report_name == EXCLUDE_REPORT,
+                            State.selected_preview,
                             rx.button(
                                 "Просмотр",
                                 type="submit",
@@ -225,7 +227,7 @@ def report_details_panel() -> rx.Component:
                         ),
                         spacing="3",
                         width=rx.cond(
-                            State.selected_report_name == EXCLUDE_REPORT,
+                            State.selected_preview,
                             "100%",
                             "60%",
                         ),

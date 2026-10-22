@@ -74,6 +74,9 @@ class ReportParameter(BaseModel):
     default: Optional[Any] = Field(
         default=None, description="Default value if not provided"
     )
+    visibility: bool = Field(
+        default=True, description="Выводить поле в интерфейс или нет"
+    )
 
 
 class ReportMetadata(BaseModel):
@@ -99,6 +102,7 @@ class ReportMetadata(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
+    preview: bool
     version: str = "1.0"
     format: str = Field(
         description="Output format generator to use (weasyprint etc.)"
