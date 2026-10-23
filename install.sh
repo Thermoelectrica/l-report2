@@ -44,10 +44,20 @@ echo -e "${YELLOW}Checking LibreOffice...${NC}"
 if ! command -v libreoffice &> /dev/null; then
     echo -e "${YELLOW}Installing LibreOffice for DOCX → PDF conversion...${NC}"
     apt-get update
-    apt-get install -y libreoffice-impress
+    apt-get install -y libreoffice-impress openjdk-17-jre-headless
     echo -e "${GREEN}✓ LibreOffice installed${NC}"
 else
     echo -e "${GREEN}✓ LibreOffice found${NC}"
+    # Ensure Java is installed for LibreOffice stability
+    if ! command -v java &> /dev/null; then
+        echo -e "${YELLOW}Installing OpenJDK 17 for LibreOffice stability...${NC}"
+        apt-get update
+        apt-get install -y openjdk-17-jre-headless
+        echo -e "${GREEN}✓ OpenJDK 17 installed${NC}"
+    else
+        echo -e "${GREEN}✓ Java found${NC}"
+    fi
+fi
 fi
 
 # Check if service user exists, create if not
