@@ -21,7 +21,7 @@ class DocxToPdfConverter:
                              Если None, используется 'libreoffice' из PATH.
         """
         self.libreoffice_path = libreoffice_path or "libreoffice"
-        self.work_dir = Path("/tmp/pdf_conversion_work")
+        self.work_dir = Path("./pdf_conversion_work")
         self.work_dir.mkdir(exist_ok=True)
 
     async def convert(self, docx_bytes: bytes) -> bytes:
@@ -88,8 +88,7 @@ class DocxToPdfConverter:
                 cmd,
                 capture_output=True,
                 text=True,
-                cwd=str(output_dir),
-                timeout=120  # максимум 2 минуты на конвертацию
+                timeout=120
             )
 
             if result.returncode != 0:
