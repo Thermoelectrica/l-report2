@@ -58,7 +58,6 @@ else
         echo -e "${GREEN}✓ Java found${NC}"
     fi
 fi
-fi
 
 # Check if service user exists, create if not
 echo -e "${YELLOW}Checking service user...${NC}"
