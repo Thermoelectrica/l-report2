@@ -118,6 +118,8 @@ class DocxTplRenderer(ReportRenderer):
                     "Ток.вед часть (Изол Y)", 
                     "Ток.вед часть",
                     "Ток.вед часть (Изол E)",
+                    "БКС (Al)", # development
+                    "БКС (Cu)"
                 ] and max_temp >= 110 or
                 row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and max_temp >= 95 or
                 row["is_test_ready"] and t_anomaly >= 15
@@ -136,6 +138,8 @@ class DocxTplRenderer(ReportRenderer):
                     "Ток.вед часть (Изол Y)", 
                     "Ток.вед часть",
                     "Ток.вед часть (Изол E)",
+                    "БКС (Al)",  # development
+                    "БКС (Cu)"
                 ] and 100 <= max_temp < 110 or
                 row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and 80 <= max_temp < 95 or
                 0 < t_anomaly < 15
@@ -417,9 +421,6 @@ class DocxTplRenderer(ReportRenderer):
 
             jinja_env = template_renderer._create_environment(report)
 
-            if self.DEBUG:
-                print(f"DATA: {self.query_results['data']}")
-
             # Ищем дубликаты в рамках интервала запроса
             self.duplicate_finder()
 
@@ -444,6 +445,9 @@ class DocxTplRenderer(ReportRenderer):
             # Сортируем список по весу дефекта
             self.query_results["data"] = sorted(data_with_summary, key=lambda x: x["defect_weight"])
 
+            if self.DEBUG:
+                print(f"DATA: {self.query_results['data']}")
+            
             # Создаем объекты InlineImage 
             for row in self.query_results["data"]:
                 pictures = []
