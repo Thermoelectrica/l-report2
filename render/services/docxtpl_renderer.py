@@ -432,15 +432,26 @@ class DocxTplRenderer(ReportRenderer):
                 if row.get("skip_case"):
                     continue
                 result = self.defect_summary(row)
+
+                # хардкод, TODO подумать как исправить
                 if (
+                    self.format_name != "pdf-protocol" and
                     not params.get("include_developing") and 
                     result["defect_weight"] in [3, 6]
                 ):
-                    continue  # пропускаем развивающиеся дефекты
+                    continue  # пропускаем развивающиеся дефекты 
+                              # если это не экспресс-отчет
+                if (
+                    self.format_name == "pdf-protocol" and 
+                    result["defect_weight"] in [2, 3, 5, 6]
+                ):
+                    continue  # пропускаем развивающиеся дефекты 
+                              # и 2 группу для экспресс-отчета
+                
                 data_with_summary.append(result)
 
             if not data_with_summary:
-                raise ValueError(f"По {params['plant_name']} нет дефектов 1 и 2 группы для показа")
+                raise ValueError(f"По {params['plant_name']} нет дефектов для показа")
             
             # Сортируем список по весу дефекта
             self.query_results["data"] = sorted(data_with_summary, key=lambda x: x["defect_weight"])
