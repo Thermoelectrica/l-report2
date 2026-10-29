@@ -91,9 +91,12 @@ class DocxTplRenderer(ReportRenderer):
                     ]
     
     def defect_summary(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """ Определяет группу дефектов на основе методики 2.
-            Методика 1 реализована в шаблоне. Текущий рачет
-            по методике 2 сильно дополнен и расширён методикой 1.
+        """Классифицирует дефект по группе опасности и присваивает вес.
+        На основе температурных аномалий и типа оборудования
+        (MOTOR/PANEL) определяет group_label, output_text и defect_weight.
+        Определяет группу дефектов на основе методики 2.
+        Методика 1 реализована в шаблоне. Текущий рачет
+        по методике 2 сильно дополнен и расширён методикой 1
         """
         group_label, output_text = "", ""
         t_max = row.get("t_max") or 0
@@ -118,8 +121,8 @@ class DocxTplRenderer(ReportRenderer):
                     "Ток.вед часть (Изол Y)", 
                     "Ток.вед часть",
                     "Ток.вед часть (Изол E)",
-                    "БКС (Al)", # development
-                    "БКС (Cu)"
+                    "БКС (Al)", # дополнение, нет в текущей методике
+                    "БКС (Cu)"  #
                 ] and max_temp >= 110 or
                 row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and max_temp >= 95 or
                 row["is_test_ready"] and t_anomaly >= 15
@@ -138,8 +141,8 @@ class DocxTplRenderer(ReportRenderer):
                     "Ток.вед часть (Изол Y)", 
                     "Ток.вед часть",
                     "Ток.вед часть (Изол E)",
-                    "БКС (Al)",  # development
-                    "БКС (Cu)"
+                    "БКС (Al)",  # дополнение, нет в текущей методике
+                    "БКС (Cu)"   # 
                 ] and 100 <= max_temp < 110 or
                 row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and 80 <= max_temp < 95 or
                 0 < t_anomaly < 15
@@ -148,11 +151,11 @@ class DocxTplRenderer(ReportRenderer):
                     print(
                         f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
                         f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
-                        f" DEBUG1: {row['defect_type_short_name'] == 'Качение' and 80 <= max_temp < 110}"
-                        f" DEBUG2: {row['defect_type_short_name'] == 'Скольжение' and 70 <= max_temp < 80}"
-                        f" DEBUG3: {row['defect_type_short_name'] in ['Ток.вед часть (Изол Y)', 'Ток.вед часть','Ток.вед часть (Изол E)',] and 100 <= max_temp < 110}"
-                        f" DEBUG4: {row['defect_type_short_name'] == 'Каб. нак. (ПВХ)' and 80 <= max_temp < 95}"
-                        f" DEBUG5: {0 < t_anomaly < 15}"
+                        f" DEBUG5_1: {row['defect_type_short_name'] == 'Качение' and 80 <= max_temp < 110}"
+                        f" DEBUG5_2: {row['defect_type_short_name'] == 'Скольжение' and 70 <= max_temp < 80}"
+                        f" DEBUG5_3: {row['defect_type_short_name'] in ['Ток.вед часть (Изол Y)', 'Ток.вед часть','Ток.вед часть (Изол E)',] and 100 <= max_temp < 110}"
+                        f" DEBUG5_4: {row['defect_type_short_name'] == 'Каб. нак. (ПВХ)' and 80 <= max_temp < 95}"
+                        f" DEBUG5_5: {0 < t_anomaly < 15}"
                     )
                 group_label = (
                     "Дефекты электродвигателей с превышением наибольшей "
@@ -188,7 +191,12 @@ class DocxTplRenderer(ReportRenderer):
             current06_cond = (nominal * 0.6 <= measured < nominal) and is_test_ready
             current03_cond = (nominal * 0.3 <= measured < nominal * 0.6) and is_test_ready
             current00_cond = (0 <= measured < nominal * 0.3) and is_test_ready
-            # часть условия 'is_condition_one' из шаблона (методика 2)
+            # условие из шаблона (методика 1)
+            is_condition_zero = (
+                (row.get("t_observed") and t_max and t_sticker) or 
+                (row.get("t_observed") and t_max and not t_sticker and is_test_ready is True)
+            )
+            # условие из шаблона (методика 1)
             is_condition_one = (
                 (t_sticker != 0 and 
                 ((delta_t_a >= 0 and delta_t_b >= 0) or 
@@ -202,6 +210,7 @@ class DocxTplRenderer(ReportRenderer):
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and max_excess >= 80 or
                 row["is_attention_required"] is True or
                 (delta_t + 40 - t_max) > 150 or
+                is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0) or # п.1_2 шаблона
                 current06_cond and (excess_temp_to_current + 40 - t_max) > 150 or
                 current03_cond and (excess_temp_to_half_current - 30) > 200 or
                 current00_cond and not is_condition_one and delta_t >= 30 or  # п.3_2 шаблона
@@ -211,14 +220,15 @@ class DocxTplRenderer(ReportRenderer):
                     print(
                         f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
                         f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
-                        f" DEBUG1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and max_excess >= 30}"
-                        f" DEBUG2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and max_excess >= 80}"
-                        f" DEBUG3: {row['is_attention_required'] is True}"
-                        f" DEBUG4: {(delta_t + 40 - t_max) > 150}"
-                        f" DEBUG5: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
-                        f" DEBUG6: {current03_cond and (excess_temp_to_half_current - 30) > 200}"
-                        f" DEBUG7: {current00_cond and not is_condition_one and delta_t >= 30}"
-                        f" DEBUG8: {is_condition_one and (delta_t_a >= 100 or delta_t_b >= 100)}"
+                        f" DEBUG1_1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and max_excess >= 30}"
+                        f" DEBUG1_2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and max_excess >= 80}"
+                        f" DEBUG1_3: {row['is_attention_required'] is True}"
+                        f" DEBUG1_4: {(delta_t + 40 - t_max) > 150}"
+                        f" DEBUG1_5: {is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0)}"
+                        f" DEBUG1_6: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
+                        f" DEBUG1_7: {current03_cond and (excess_temp_to_half_current - 30) > 200}"
+                        f" DEBUG1_8: {current00_cond and not is_condition_one and delta_t >= 30}"
+                        f" DEBUG1_9: {is_condition_one and (delta_t_a >= 100 or delta_t_b >= 100)}"
                     )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
@@ -240,15 +250,15 @@ class DocxTplRenderer(ReportRenderer):
                     print(
                         f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
                         f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
-                        f" DEBUG1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and 0 < max_excess < 30}"
-                        f" DEBUG2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and 70 <= max_excess < 80}"
-                        f" DEBUG3: {is_test_ready and t_excess != 0 and delta_t >= t_excess}"
-                        f" DEBUG4: {current06_cond and t_excess != 0 and (excess_temp_to_current >= t_excess)}"
-                        f" DEBUG5: {current03_cond and t_excess != 0 and (excess_temp_to_half_current >= t_excess)}"
-                        f" DEBUG6: {current03_cond and ((excess_temp_to_half_current - 30) >= 0)}"
-                        f" DEBUG7: {current00_cond and delta_t >= 10}"
-                        f" DEBUG8: {is_test_ready is False and (t_sticker_min - t_max >= 0)}"
-                        f" DEBUG9: {delta_t_a < 0 and delta_t_b >= 0}"
+                        f" DEBUG2_1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and 0 < max_excess < 30}"
+                        f" DEBUG2_2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and 70 <= max_excess < 80}"
+                        f" DEBUG2_3: {is_test_ready and t_excess != 0 and delta_t >= t_excess}"
+                        f" DEBUG2_4: {current06_cond and t_excess != 0 and (excess_temp_to_current >= t_excess)}"
+                        f" DEBUG2_5: {current03_cond and t_excess != 0 and (excess_temp_to_half_current >= t_excess)}"
+                        f" DEBUG2_6: {current03_cond and ((excess_temp_to_half_current - 30) >= 0)}"
+                        f" DEBUG2_7: {current00_cond and delta_t >= 10}"
+                        f" DEBUG2_8: {is_test_ready is False and (t_sticker_min - t_max >= 0)}"
+                        f" DEBUG2_9: {delta_t_a < 0 and delta_t_b >= 0}"
                     )
                 group_label = (
                     "Дефекты распределительных устройств с превышением "
