@@ -103,14 +103,16 @@ class DocxTplRenderer(ReportRenderer):
         t_sticker_min = row.get("t_sticker_min") or 0
         if t_sticker_min == 0:
             t_sticker_min = template_renderer.t_sticker_parser(row["t_sticker"]) or t_max
-        t_observed  = row.get("t_observed") or t_max
+        t_observed = row.get("t_observed") or 0
+        t_sticker = row.get("t_sticker_min") or 0
+        t_observed_max  = row.get("t_observed") or t_max
         excess_sticker = t_sticker_min - t_max
-        excess_thermal = t_observed - t_max
-        t_similar_unit = row.get("t_similar_unit", 0) or 0
-        t_anomaly = (t_observed - t_similar_unit) if t_similar_unit else 0
+        excess_thermal = t_observed_max - t_max
+        t_similar_unit = row.get("t_similar_unit") or 0
+        t_anomaly = (t_observed_max - t_similar_unit) if t_similar_unit else 0
         max_excess = max(excess_sticker, excess_thermal)
         if row["is_panel"] == "MOTOR":
-            max_temp = max((row.get("t_sticker_min") or 0), (row.get("t_observed") or 0))
+            max_temp = max(t_sticker, t_observed)
             group_label = "Начальная стадия развития дефекта."
             output_text = "Развитие дефекта."
             defect_weight = 6
@@ -149,12 +151,12 @@ class DocxTplRenderer(ReportRenderer):
             ):
                 if self.DEBUG:
                     print(
-                        f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
-                        f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
-                        f" DEBUG5_1: {row['defect_type_short_name'] == 'Качение' and 80 <= max_temp < 110}"
-                        f" DEBUG5_2: {row['defect_type_short_name'] == 'Скольжение' and 70 <= max_temp < 80}"
-                        f" DEBUG5_3: {row['defect_type_short_name'] in ['Ток.вед часть (Изол Y)', 'Ток.вед часть','Ток.вед часть (Изол E)',] and 100 <= max_temp < 110}"
-                        f" DEBUG5_4: {row['defect_type_short_name'] == 'Каб. нак. (ПВХ)' and 80 <= max_temp < 95}"
+                        f"EQIPMENT TYPE NAME: {row.get('equipment_type_name')}",
+                        f" FULL EQIPMENT NAME: {row.get('full_equipment_name')}",
+                        f" DEBUG5_1: {row.get('defect_type_short_name') == 'Качение' and 80 <= max_temp < 110}"
+                        f" DEBUG5_2: {row.get('defect_type_short_name') == 'Скольжение' and 70 <= max_temp < 80}"
+                        f" DEBUG5_3: {row.get('defect_type_short_name') in ['Ток.вед часть (Изол Y)', 'Ток.вед часть','Ток.вед часть (Изол E)',] and 100 <= max_temp < 110}"
+                        f" DEBUG5_4: {row.get('defect_type_short_name') == 'Каб. нак. (ПВХ)' and 80 <= max_temp < 95}"
                         f" DEBUG5_5: {0 < t_anomaly < 15}"
                     )
                 group_label = (
@@ -170,8 +172,9 @@ class DocxTplRenderer(ReportRenderer):
         if row["is_panel"] == "PANEL":
             group_label = "Начальная стадия развития дефекта."
             defect_weight = 3
-            t_sticker = row.get("t_sticker_min") or 0
-            t_environment = row.get("t_environment", 0) or 0
+            #t_sticker = row.get("t_sticker_min") or 0
+            #t_observed = row.get("t_observed") or 0
+            t_environment = row.get("t_environment") or 0
             delta_t = t_observed - t_environment
             delta_t_a = t_observed - t_max
             delta_t_b = t_sticker - t_max
@@ -193,8 +196,8 @@ class DocxTplRenderer(ReportRenderer):
             current00_cond = (0 <= measured < nominal * 0.3) and is_test_ready
             # условие из шаблона (методика 1)
             is_condition_zero = (
-                (row.get("t_observed") and t_max and t_sticker) or 
-                (row.get("t_observed") and t_max and not t_sticker and is_test_ready is True)
+                (t_observed != 0 and t_max and t_sticker) or 
+                (t_observed != 0 and t_max and not t_sticker and is_test_ready is True)
             )
             # условие из шаблона (методика 1)
             is_condition_one = (
@@ -218,11 +221,11 @@ class DocxTplRenderer(ReportRenderer):
             ):
                 if self.DEBUG:
                     print(
-                        f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
-                        f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
-                        f" DEBUG1_1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and max_excess >= 30}"
-                        f" DEBUG1_2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and max_excess >= 80}"
-                        f" DEBUG1_3: {row['is_attention_required'] is True}"
+                        f"EQIPMENT TYPE NAME: {row.get('equipment_type_name')}",
+                        f" FULL EQIPMENT NAME: {row.get('full_equipment_name')}",
+                        f" DEBUG1_1: {row.get('equipment_type_name') != 'Ячейка КРУ 6-10 кВ' and max_excess >= 30}"
+                        f" DEBUG1_2: {row.get('equipment_type_name') == 'Ячейка КРУ 6-10 кВ' and max_excess >= 80}"
+                        f" DEBUG1_3: {row.get('is_attention_required') is True}"
                         f" DEBUG1_4: {(delta_t + 40 - t_max) > 150}"
                         f" DEBUG1_5: {is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0)}"
                         f" DEBUG1_6: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
@@ -248,10 +251,10 @@ class DocxTplRenderer(ReportRenderer):
             ):
                 if self.DEBUG:
                     print(
-                        f"EQIPMENT TYPE NAME: {row['equipment_type_name']}",
-                        f" FULL EQIPMENT NAME: {row['full_equipment_name']}",
-                        f" DEBUG2_1: {row['equipment_type_name'] != 'Ячейка КРУ 6-10 кВ' and 0 < max_excess < 30}"
-                        f" DEBUG2_2: {row['equipment_type_name'] == 'Ячейка КРУ 6-10 кВ' and 70 <= max_excess < 80}"
+                        f"EQIPMENT TYPE NAME: {row.get('equipment_type_name')}",
+                        f" FULL EQIPMENT NAME: {row.get('full_equipment_name')}",
+                        f" DEBUG2_1: {row.get('equipment_type_name') != 'Ячейка КРУ 6-10 кВ' and 0 < max_excess < 30}"
+                        f" DEBUG2_2: {row.get('equipment_type_name') == 'Ячейка КРУ 6-10 кВ' and 70 <= max_excess < 80}"
                         f" DEBUG2_3: {is_test_ready and t_excess != 0 and delta_t >= t_excess}"
                         f" DEBUG2_4: {current06_cond and t_excess != 0 and (excess_temp_to_current >= t_excess)}"
                         f" DEBUG2_5: {current03_cond and t_excess != 0 and (excess_temp_to_half_current >= t_excess)}"
