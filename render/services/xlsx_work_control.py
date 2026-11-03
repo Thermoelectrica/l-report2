@@ -36,7 +36,9 @@ class XlsxWorkControl(ReportRenderer):
             "Инспектор экскаваторы",
             "Инспектор Карелия",
             "Ерошкина Елизавета Алексеевна",
-            "Демо"
+            "Демо",
+            "Главный Энергетик Тремаскин Александр Васильевич",
+            "Персонал Жеронсоко разреза"
         )
         # Первое значение - название столбца
         # Второе значение - ширина столбца
@@ -263,6 +265,28 @@ class XlsxWorkControl(ReportRenderer):
                 cell.style = table_cell
                 cell.font = bold_font
                 cell.alignment = Alignment(horizontal="center")
+
+            # Объединяем дубликаты full_name_major
+            # поскольку за день инспектор может сделать две станции
+            for query_obj in self.query_results['data']:
+                # Итерируемся по копиям, чтобы безопасно удалять элементы
+                for idx1, name1 in enumerate(query_obj["full_name_major"]):
+                    for idx2, name2 in enumerate(list(query_obj["full_name_major"][idx1 + 1:]), start=idx1 + 1):
+                        if name1 == name2:
+                            del query_obj["full_name_major"][idx2]
+                            query_obj["plant_name"][idx1] += f", {query_obj['plant_name'][idx2]}"
+                            del query_obj["plant_name"][idx2]
+                            item = query_obj["full_names_minor"][idx2][0]
+                            if item not in query_obj["full_names_minor"][idx1]:
+                                query_obj["full_names_minor"][idx1].append(item)
+                            del query_obj["full_names_minor"][idx2]
+                            for elem in ["montage", "work_hours", "work_percentage"]:
+                                if (
+                                    query_obj[elem][idx1] is not None and
+                                    query_obj[elem][idx2] is not None
+                                ):
+                                    query_obj[elem][idx1] += query_obj[elem][idx2]
+                                del query_obj[elem][idx2]
 
             # Задваиваем каждый элемент
             doubled = [
