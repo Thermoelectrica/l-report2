@@ -19,6 +19,23 @@ all_combinations = [
         "is_test_ready": True,
         "defect_weight": 5,
     },
+    # ----- реальный кейс (падает, надо править методику) ------------
+    {
+        "id": 100,
+        "is_panel": "MOTOR",
+        "defect_type_short_name": "Ток.вед часть",
+        'is_sticker_present': True,
+        "t_sticker": "80-90",
+        "t_sticker_min": 50,
+        "t_max": 100,
+        't_excess': 60,
+        "t_observed": 56.7,
+        't_observed_excess': 66.7,
+        "t_environment": -10.0,
+        'is_attention_required': False,
+        "is_test_ready": True,
+        "defect_weight": 5,
+    },
     {
         "id": 2,
         "is_panel": "MOTOR",
@@ -91,7 +108,6 @@ all_combinations = [
         "is_test_ready": False,
         "defect_weight": 6,
     },
-
     # ─── Высокий риск отказа (weight=4) ─────────────────────────
     {
         "id": 8,
@@ -201,7 +217,6 @@ all_combinations = [
         "is_test_ready": True,
         "defect_weight": 4,
     },
-
     # ─── Превышение температуры (weight=5) ──────────────────────
     {
         "id": 17,
@@ -326,7 +341,7 @@ all_combinations = [
         "measured_current": 8.0,
         "is_test_ready": True,
         "is_attention_required": False,
-        "defect_weight": 2,
+        "defect_weight": 3,
     },
     # ─── Критический (weight=1) ─────────────────────────────────
     {
@@ -380,7 +395,6 @@ all_combinations = [
         "is_attention_required": True,
         "defect_weight": 1,
     },
-
     # ─── Умеренный (weight=2) ─────────────────────────────────────
     {
         "id": 29,
@@ -483,7 +497,7 @@ all_combinations = [
         "measured_current": 8.0,
         "is_test_ready": True,
         "is_attention_required": False,
-        "defect_weight": 2,
+        "defect_weight": 3,
     },
     {
         "id": 35,
