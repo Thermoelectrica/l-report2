@@ -105,7 +105,6 @@ class ReportRepository:
             format=metadata_dict["format"],  # Required field
             timeout=metadata_dict.get("timeout"),
             cache_ttl_minutes=metadata_dict.get("cache_ttl_minutes"),
-            is_internal=metadata_dict.get("is_internal", False),
             parameters=parameters,
         )
 
@@ -114,11 +113,7 @@ class ReportRepository:
     def list_reports(self) -> List[ReportListItem]:
         """Get list of all available reports."""
         return [
-            ReportListItem(
-                id=report.id, 
-                name=report.metadata.name, 
-                is_internal=report.metadata.is_internal
-            )
+            ReportListItem(id=report.id, name=report.metadata.name)
             for report in self._reports.values()
         ]
 

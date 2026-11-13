@@ -1,22 +1,13 @@
 """Authentication state management."""
 
-from pathlib import Path
-
 import reflex as rx
 import httpx
 from typing import Optional
 import logging
 
-from render.models import metadata, ParameterType, ReportParameter
-from render.services.repository import Report
 from report2.auth.jwt_utils import decode_jwt_token
-from report2.services import ensure_services_initialized, query_executor
-from render.config import settings
 
 logger = logging.getLogger(__name__)
-
-# Permission script path
-PERM_SQL_PATH = Path(f"./{settings.reports_path}/user-permissions/")
 
 
 class AuthState(rx.State):
@@ -31,9 +22,6 @@ class AuthState(rx.State):
     login_password: str = ""
     login_error: str = ""
     is_logging_in: bool = False
-
-    # User permissions
-    user_permissions: dict = {}
     
     # Token storage (using secure cookies for security - HTTP-only, inaccessible to JavaScript)
     # This protects against XSS attacks
@@ -76,8 +64,7 @@ class AuthState(rx.State):
             if payload:
                 # Token is valid
                 self.is_authenticated = True
-                sub = payload.get("sub")
-                self.user_id = int(sub) if sub is not None else None
+                self.user_id = payload.get("user_id")
                 logger.info(f"Token verified for user: {self.username} (user_id: {self.user_id})")
             else:
                 # Token invalid or expired, try to refresh
@@ -134,27 +121,11 @@ class AuthState(rx.State):
                     payload = decode_jwt_token(self.access_token, config.jwt_public_key)
                     if payload:
                         self.is_authenticated = True
-                        sub = payload.get("sub")
-                        self.user_id = int(sub) if sub is not None else None
+                        self.user_id = payload.get("user_id")
                     
                     self.is_logging_in = False
                     
                     logger.info(f"Login successful for user: {self.username} (user_id: {self.user_id})")
-                    
-                    # Ensure query executor is initialized
-                    await ensure_services_initialized()
-                    
-                    # Получаем разрешения пользователя
-                    self.user_permissions = await query_executor.execute_queries(
-                        Report(PERM_SQL_PATH,
-                            metadata.ReportMetadata(
-                                parameters=[
-                                    ReportParameter(name="user_id", type=ParameterType.INTEGER, required=True)
-                                ]
-                            )
-                        ), 
-                        {"user_id": self.user_id if self.user_id is not None else 0}
-                    )
                     
                     # Redirect to main page
                     return rx.redirect("/")
@@ -217,7 +188,7 @@ class AuthState(rx.State):
                     payload = decode_jwt_token(self.access_token, config.jwt_public_key)
                     if payload:
                         self.is_authenticated = True
-                        self.user_id = payload.get("sub")
+                        self.user_id = payload.get("user_id")
                         logger.info(f"Token refreshed successfully for user: {self.username}")
                     else:
                         raise Exception("Invalid token received from refresh")
