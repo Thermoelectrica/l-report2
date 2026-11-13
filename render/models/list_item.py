@@ -11,3 +11,4 @@ class ReportListItem(BaseModel):
 
     id: str
     name: str
+    is_internal: bool = False
