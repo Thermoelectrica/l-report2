@@ -99,13 +99,12 @@ class ReportMetadata(BaseModel):
                    Use these to build input forms and validate user input.
     """
 
-    id: str = ""
-    name: str = ""
+    id: str
+    name: str
     description: Optional[str] = None
-    preview: bool = False
+    preview: bool
     version: str = "1.0"
     format: str = Field(
-        default="",
         description="Output format generator to use (weasyprint etc.)"
     )
     timeout: Optional[int] = Field(
@@ -113,9 +112,6 @@ class ReportMetadata(BaseModel):
     )
     cache_ttl_minutes: Optional[int] = Field(
         default=None, description="Cache time-to-live in minutes (overrides global setting)"
-    )
-    is_internal: bool = Field(
-        default=False, description="Whether this is an internal report"
     )
     parameters: List[ReportParameter] = Field(
         default_factory=list, description="List of parameters this report accepts"

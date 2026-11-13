@@ -18,18 +18,17 @@ class TestReportListItem:
 
     def test_create_valid_item(self):
         """Test creating a valid report list item."""
-        item = ReportListItem(id="test-report", name="Test Report", is_internal=False)
+        item = ReportListItem(id="test-report", name="Test Report")
         assert item.id == "test-report"
         assert item.name == "Test Report"
-        assert item.is_internal is False
 
     def test_missing_required_fields(self):
         """Test validation fails when required fields are missing."""
         with pytest.raises(ValidationError):
-            ReportListItem(id="test-report", is_internal=False)  # missing name
+            ReportListItem(id="test-report")  # missing name
 
         with pytest.raises(ValidationError):
-            ReportListItem(name="Test Report", is_internal=False)  # missing id
+            ReportListItem(name="Test Report")  # missing id
 
 
 class TestReportParameter:

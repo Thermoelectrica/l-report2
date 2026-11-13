@@ -53,24 +53,10 @@ class State(AuthState):
             await ensure_services_initialized()
 
             report_list = render_service.listReports()
-            _, is_internal = self._get_permissions_data()
-
-            self.reports = [
-                {"id": r.id, "name": r.name} 
-                for r in report_list if is_internal or not r.is_internal
-            ]
+            self.reports = [{"id": r.id, "name": r.name} for r in report_list]
         except Exception as e:
             self.render_error = f"Failed to load reports: {str(e)}"
             logger.error(f"Error loading reports: {e}", exc_info=True)
-
-    def _get_permissions_data(self) -> tuple:
-        """Extract plant names and is_internal flag from user permissions."""
-        if self.user_permissions and "data" in self.user_permissions and self.user_permissions["data"]:
-            return (
-                self.user_permissions["data"][0].get("plant_names", []),
-                self.user_permissions["data"][0].get("is_internal", False)
-            )
-        return [], False
 
     @rx.event
     async def select_report(self, report_id: str):
@@ -87,9 +73,6 @@ class State(AuthState):
             self.selected_report_description = metadata.description or ""
             self.selected_preview = metadata.preview
 
-            # Get plant_names from user permissions (available after login)
-            plant_names, _ = self._get_permissions_data()
-
             # Convert parameters to ParamInfo objects
             self.report_parameters = [
                 ParamInfo(
@@ -98,7 +81,7 @@ class State(AuthState):
                     required=p.required,
                     description=p.description or p.name,
                     placeholder=p.placeholder or "",
-                    enum_values=plant_names if p.name == "plant_name" else (p.enum or []),
+                    enum_values=p.enum or [],
                     visibility=getattr(p, "visibility", True),
                     value=str(p.default) if p.default is not None else "",  # Initialize value with default
                 )
