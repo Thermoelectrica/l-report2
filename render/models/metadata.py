@@ -116,3 +116,10 @@ class ReportMetadata(BaseModel):
     parameters: List[ReportParameter] = Field(
         default_factory=list, description="List of parameters this report accepts"
     )
+    access_query: Optional[str] = Field(
+        default=None,
+        description=(
+            "SQL file checked before render/preview. Must return a single boolean; "
+            "anything but TRUE denies access. Can use :current_inspector_id."
+        ),
+    )

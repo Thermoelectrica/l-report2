@@ -40,6 +40,7 @@ description: "List all tables in the database"
 version: "1.0"
 timeout: 120
 cache_ttl_minutes: 10  # Optional: Override global cache TTL (default: 5 minutes)
+access_query: "access_check.sql"  # Optional: SQL returning one boolean; render/preview denied unless TRUE
 
 parameters:
   - name: schema_name
@@ -48,6 +49,17 @@ parameters:
     description: "Filter by schema"
     default: "public"
 ```
+
+#### Inspector context (`:current_inspector_id`)
+
+The engine injects the logged-in inspector id (JWT `sub`) as the reserved parameter
+`:current_inspector_id` into **all** report SQL (enum queries, `access_query`, main queries).
+It cannot be overridden from the form/URL, is `NULL` for an unauthenticated user, and is
+part of the render cache key. It is bound as text, so cast it in SQL:
+`CAST(:current_inspector_id AS integer)` (not `:current_inspector_id::integer`).
+
+`access_query` runs before the cache lookup in `executeRender` and before queries in
+`generatePreview`; a missing file or any result other than `TRUE` denies access.
 
 ### SQL Queries
 

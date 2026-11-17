@@ -106,6 +106,7 @@ class ReportRepository:
             timeout=metadata_dict.get("timeout"),
             cache_ttl_minutes=metadata_dict.get("cache_ttl_minutes"),
             parameters=parameters,
+            access_query=metadata_dict.get("access_query"),
         )
 
         return Report(report_dir, metadata)

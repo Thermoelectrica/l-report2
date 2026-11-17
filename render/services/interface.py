@@ -69,7 +69,11 @@ class RenderService(ABC):
 
     @abstractmethod
     async def executeRender(
-        self, report_id: str, params: Dict[str, Any], force_refresh: bool = False
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        force_refresh: bool = False,
+        current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """Execute complete render workflow and return the result.
 
@@ -112,7 +116,10 @@ class RenderService(ABC):
 
     @abstractmethod
     async def getRenderStatus(
-        self, report_id: str, params: Dict[str, Any]
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """Get the current status and result of a report rendering.
 
@@ -216,7 +223,10 @@ class RenderService(ABC):
 
     @abstractmethod
     async def generatePreview(
-        self, report_id: str, params: Dict[str, Any]
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> str:
         """Generate HTML preview without converting to final format.
 

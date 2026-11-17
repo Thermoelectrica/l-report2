@@ -41,6 +41,22 @@ class AuthState(rx.State):
     # Username can stay in LocalStorage as it's not sensitive
     username: str = rx.LocalStorage()  # Store username from login form
     
+    def _current_inspector_id(self) -> Optional[int]:
+        """Inspector id for server-side access checks (not an event handler).
+
+        Uses the verified ``user_id`` if set; otherwise decodes the access-token
+        cookie (e.g. on the preview page, which does not run on_load).
+        Returns None if the user is not authenticated -> access is denied.
+        """
+        if self.user_id is not None:
+            return self.user_id
+        if not self.access_token:
+            return None
+        from report2.config import get_auth_config
+
+        payload = decode_jwt_token(self.access_token, get_auth_config().jwt_public_key)
+        return _inspector_id(payload) if payload else None
+
     @rx.event
     async def on_load(self):
         """Check authentication on page load."""
