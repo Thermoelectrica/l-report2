@@ -456,7 +456,7 @@ class DocxTplRenderer(ReportRenderer):
                               # если это не экспресс-отчет
                 if (
                     self.format_name == "pdf-protocol" and 
-                    result["defect_weight"] in [3, 5, 6]
+                    result["defect_weight"] in [3, 6]
                 ):
                     continue  # пропускаем развивающиеся дефекты 
                               # и N группу для экспресс-отчета
