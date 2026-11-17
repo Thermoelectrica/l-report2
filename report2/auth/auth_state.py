@@ -10,6 +10,16 @@ from report2.auth.jwt_utils import decode_jwt_token
 logger = logging.getLogger(__name__)
 
 
+def _inspector_id(payload: dict) -> Optional[int]:
+    """Inspector id from l-backend JWT: it is stored in ``sub`` (as a string)."""
+    raw = payload.get("sub", payload.get("user_id"))
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        logger.warning(f"Unexpected inspector id in token: {raw!r}")
+        return None
+
+
 class AuthState(rx.State):
     """Authentication state with localStorage-based token management."""
     
@@ -64,7 +74,7 @@ class AuthState(rx.State):
             if payload:
                 # Token is valid
                 self.is_authenticated = True
-                self.user_id = payload.get("user_id")
+                self.user_id = _inspector_id(payload)
                 logger.info(f"Token verified for user: {self.username} (user_id: {self.user_id})")
             else:
                 # Token invalid or expired, try to refresh
@@ -121,7 +131,7 @@ class AuthState(rx.State):
                     payload = decode_jwt_token(self.access_token, config.jwt_public_key)
                     if payload:
                         self.is_authenticated = True
-                        self.user_id = payload.get("user_id")
+                        self.user_id = _inspector_id(payload)
                     
                     self.is_logging_in = False
                     
@@ -188,7 +198,7 @@ class AuthState(rx.State):
                     payload = decode_jwt_token(self.access_token, config.jwt_public_key)
                     if payload:
                         self.is_authenticated = True
-                        self.user_id = payload.get("user_id")
+                        self.user_id = _inspector_id(payload)
                         logger.info(f"Token refreshed successfully for user: {self.username}")
                     else:
                         raise Exception("Invalid token received from refresh")

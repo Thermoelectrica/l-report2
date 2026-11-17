@@ -7,7 +7,7 @@ import re
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, select
 
@@ -26,6 +26,11 @@ from .query_executor import query_executor
 from .repository import repository
 
 logger = logging.getLogger(__name__)
+
+# Reserved enum-query parameter: id of the logged-in inspector (JWT ``sub``).
+# Injected server-side; usable in enum_query SQL as :current_inspector_id.
+CURRENT_INSPECTOR_PARAM = "current_inspector_id"
+RESERVED_PARAMS = {CURRENT_INSPECTOR_PARAM}
 
 
 class RenderServiceImpl(RenderServiceInterface):
@@ -62,6 +67,23 @@ class RenderServiceImpl(RenderServiceInterface):
         """Get list of all available reports."""
         return repository.list_reports()
 
+    @staticmethod
+    def _with_context(
+        params: Dict[str, Any], current_inspector_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """Inject reserved context parameters into enum query params.
+
+        Reserved values always override anything the client sent, so a user
+        cannot spoof another inspector via form parameters. The id is passed as
+        text (enum queries bind unknown params as ``::text``); SQL should cast it,
+        e.g. ``CAST(:current_inspector_id AS integer)``. None -> SQL NULL.
+        """
+        merged = dict(params)
+        merged[CURRENT_INSPECTOR_PARAM] = (
+            str(current_inspector_id) if current_inspector_id is not None else None
+        )
+        return merged
+
     def _parse_enum_query_params(self, query_file: Path) -> List[str]:
         """Extract parameter names from enum query SQL file.
         
@@ -79,8 +101,9 @@ class RenderServiceImpl(RenderServiceInterface):
             # Exclude PostgreSQL type casts (::type) by using negative lookbehind
             named_params = re.findall(r"(?<!:):(\w+)", query)
             
-            # Return unique parameter names
-            return list(set(named_params))
+            # Return unique parameter names (reserved context params are not
+            # report parameters and never trigger enum refreshes)
+            return list(set(named_params) - RESERVED_PARAMS)
         except Exception as e:
             logger.error(f"Failed to parse enum query file {query_file}: {e}")
             return []
@@ -95,7 +118,9 @@ class RenderServiceImpl(RenderServiceInterface):
         # Get appropriate generator
         return renderer_registry.get_generator(output_format)
 
-    async def getReportMetadata(self, report_id: str) -> ReportMetadata:
+    async def getReportMetadata(
+        self, report_id: str, current_inspector_id: Optional[int] = None
+    ) -> ReportMetadata:
         """Get detailed metadata for a specific report with resolved dynamic enums."""
         # Get base metadata from repository
         metadata = repository.get_metadata(report_id)
@@ -152,7 +177,8 @@ class RenderServiceImpl(RenderServiceInterface):
                     # Execute the enum query with initial parameter values
                     logger.info(f"Executing enum query from {query_file}")
                     enum_values = await query_executor.execute_enum_query(
-                        query_file, initial_params
+                        query_file,
+                        self._with_context(initial_params, current_inspector_id),
                     )
                     param.enum = enum_values
                     logger.info(
@@ -167,7 +193,9 @@ class RenderServiceImpl(RenderServiceInterface):
 
         return metadata_copy
 
-    async def getParameterDependencies(self, report_id: str) -> Dict[str, List[str]]:
+    async def getParameterDependencies(
+        self, report_id: str, current_inspector_id: Optional[int] = None
+    ) -> Dict[str, List[str]]:
         """Get dependency graph showing which parameters affect which enum queries.
         
         Args:
@@ -177,7 +205,7 @@ class RenderServiceImpl(RenderServiceInterface):
             Dictionary mapping parameter names to list of dependent parameter names
         """
         # Get metadata (which includes parsed enum_query_params)
-        metadata = await self.getReportMetadata(report_id)
+        metadata = await self.getReportMetadata(report_id, current_inspector_id)
         
         # Build reverse dependency mapping
         # Key: parameter that changes
@@ -198,7 +226,11 @@ class RenderServiceImpl(RenderServiceInterface):
         return dependencies
 
     async def refreshEnumValues(
-        self, report_id: str, param_name: str, current_params: Dict[str, Any]
+        self,
+        report_id: str,
+        param_name: str,
+        current_params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> List[Any]:
         """Refresh enum values for a specific parameter based on current parameter values.
         
@@ -242,7 +274,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 f"Refreshing enum values for {param_name} with params: {current_params}"
             )
             enum_values = await query_executor.execute_enum_query(
-                query_file, current_params
+                query_file, self._with_context(current_params, current_inspector_id)
             )
             logger.info(
                 f"Refreshed {len(enum_values)} enum values for {param_name}: {enum_values[:5]}"
