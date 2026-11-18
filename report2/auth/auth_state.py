@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _inspector_id(payload: dict) -> Optional[int]:
     """Inspector id from l-backend JWT: it is stored in ``sub`` (as a string)."""
-    raw = payload.get("sub", payload.get("user_id"))
+    raw = payload.get("sub")
     try:
         return int(raw) if raw is not None else None
     except (TypeError, ValueError):
