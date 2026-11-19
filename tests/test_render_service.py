@@ -100,6 +100,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", {"param": "value"})
 
@@ -138,6 +139,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -176,6 +178,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -225,6 +228,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.renderer_registry") as mock_registry:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
             mock_registry.get_generator.return_value = mock_generator
             service.storage = mock_storage
 
@@ -267,6 +271,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -306,6 +311,7 @@ class TestRenderServiceIntegration:
             mock_metadata = MagicMock()
             mock_metadata.cache_ttl_minutes = None  # Use default
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
             
             # Mock generator
             mock_generator = MagicMock()

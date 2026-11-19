@@ -40,7 +40,7 @@ description: "List all tables in the database"
 version: "1.0"
 timeout: 120
 cache_ttl_minutes: 10  # Optional: Override global cache TTL (default: 5 minutes)
-access_query: "access_check.sql"  # Optional: SQL returning one boolean; render/preview denied unless TRUE
+access_query: "access_check.sql"  # Optional: access check before render/preview (see below)
 
 parameters:
   - name: schema_name
@@ -50,16 +50,37 @@ parameters:
     default: "public"
 ```
 
-#### Inspector context (`:current_inspector_id`)
+#### Reserved parameters and `access_query`
 
-The engine injects the logged-in inspector id (JWT `sub`) as the reserved parameter
-`:current_inspector_id` into **all** report SQL (enum queries, `access_query`, main queries).
-It cannot be overridden from the form/URL, is `NULL` for an unauthenticated user, and is
-part of the render cache key. It is bound as text, so cast it in SQL:
-`CAST(:current_inspector_id AS integer)` (not `:current_inspector_id::integer`).
+The engine sets these parameters server-side for **all** report SQL (enum queries,
+`access_query`, main queries). Client values with the same names are discarded, and
+report metadata may not declare them (the report fails to load).
 
-`access_query` runs before the cache lookup in `executeRender` and before queries in
-`generatePreview`; a missing file or any result other than `TRUE` denies access.
+| Parameter | Type | Value |
+|---|---|---|
+| `:current_inspector_id` | `integer` | Logged-in inspector (JWT `sub`); `NULL` if not authenticated |
+| `:plant_ids` | `uuid[]` | Set only from the `access_query` result row |
+
+`access_query` runs before the cache lookup in `executeRender` / `getRenderStatus` and
+before queries in `generatePreview`. It must return **one row with one column**: a
+non-empty `uuid[]` of plant ids. Anything else (0 rows, NULL/empty array, missing file,
+query error — logged) denies access. The array is passed to the main queries as
+`:plant_ids`, so they filter by id instead of repeating the access check:
+
+```sql
+-- access_check.sql: 0 rows -> denied
+SELECT array_agg(p.id ORDER BY p.id) AS plant_ids
+FROM lesiv.plant p
+    LEFT JOIN lesiv.inspector_plant_access ipa
+        ON ipa.plant_id = p.id AND ipa.inspector_id = :current_inspector_id
+WHERE p.name = :plant_name
+HAVING bool_and(ipa.plant_id IS NOT NULL)
+
+-- data.sql
+WHERE edv.plant_id = ANY(:plant_ids)
+```
+
+The inspector id is part of the render cache key, so cached files are per user.
 
 ### SQL Queries
 

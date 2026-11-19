@@ -24,17 +24,20 @@ from .interface import RenderService as RenderServiceInterface
 from .renderer_registry import renderer_registry
 from .query_executor import query_executor
 from .repository import repository
+from .reserved_params import (
+    CURRENT_INSPECTOR_PARAM,
+    PLANT_IDS_PARAM,
+    RESERVED_PARAMS,
+)
 
 logger = logging.getLogger(__name__)
 
-# Reserved enum-query parameter: id of the logged-in inspector (JWT ``sub``).
-# Injected server-side; usable in enum_query SQL as :current_inspector_id.
-CURRENT_INSPECTOR_PARAM = "current_inspector_id"
-RESERVED_PARAMS = {CURRENT_INSPECTOR_PARAM}
+ACCESS_DENIED_MESSAGE = "Нет доступа к отчёту с выбранными параметрами"
+ACCESS_CHECK_FAILED_MESSAGE = "Не удалось проверить доступ к отчёту"
 
 
 class ReportAccessDenied(PermissionError):
-    """Raised when a report's access_query does not grant access."""
+    """Access to the report is denied (or could not be verified)."""
 
 
 class RenderServiceImpl(RenderServiceInterface):
@@ -75,41 +78,54 @@ class RenderServiceImpl(RenderServiceInterface):
     def _with_context(
         params: Dict[str, Any], current_inspector_id: Optional[int]
     ) -> Dict[str, Any]:
-        """Inject reserved context parameters into enum query params.
+        """Return params with reserved engine params set server-side.
 
-        Reserved values always override anything the client sent, so a user
-        cannot spoof another inspector via form parameters. The id is passed as
-        text (enum queries bind unknown params as ``::text``); SQL should cast it,
-        e.g. ``CAST(:current_inspector_id AS integer)``. None -> SQL NULL.
+        Any client-supplied reserved param (e.g. ``plant_ids``) is dropped, so it
+        can only come from the access_query. ``current_inspector_id`` is bound as
+        ``::integer``; None -> SQL NULL.
         """
-        merged = dict(params)
-        merged[CURRENT_INSPECTOR_PARAM] = (
-            str(current_inspector_id) if current_inspector_id is not None else None
-        )
+        merged = {k: v for k, v in params.items() if k not in RESERVED_PARAMS}
+        merged[CURRENT_INSPECTOR_PARAM] = current_inspector_id
         return merged
 
-    async def _check_access(self, report: Any, params: Dict[str, Any]) -> None:
-        """Run the report's access_query (if any) and deny unless it returns TRUE.
+    async def _check_access(
+        self, report: Any, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Run the report's access_query (if any) and return params for the report.
 
-        Fails closed: a missing access_query file or a non-TRUE / empty result
-        raises ReportAccessDenied. DB errors propagate to the caller.
+        The access_query returns one row with one column: a non-empty array of
+        plant ids the inspector may read. It is added to the returned params as
+        ``plant_ids``, so main queries filter with ``plant_id = ANY(:plant_ids)``.
+
+        Fails closed: a missing file, no/several rows, an empty/NULL array or any
+        error raises ReportAccessDenied (errors are logged, not shown to users).
         """
         query_name = report.metadata.access_query
         if not query_name:
-            return
+            return params
 
+        inspector = params.get(CURRENT_INSPECTOR_PARAM)
         query_file = report.path / query_name
-        if not query_file.exists():
-            logger.error(f"Access query file not found: {query_file}")
-            raise ReportAccessDenied(f"Access query not found: {query_name}")
-
-        values = await query_executor.execute_enum_query(query_file, params)
-        if not values or values[0] is not True:
-            logger.warning(
-                f"Access denied to report {report.id} for inspector "
-                f"{params.get(CURRENT_INSPECTOR_PARAM)!r}"
+        try:
+            if not query_file.exists():
+                raise FileNotFoundError(f"Access query file not found: {query_file}")
+            # First column of each row; one row expected
+            values = await query_executor.execute_enum_query(query_file, params)
+        except Exception as e:
+            logger.error(
+                f"Access check failed for report {report.id} (inspector {inspector!r}): {e}",
+                exc_info=True,
             )
-            raise ReportAccessDenied("Нет доступа к выбранной станции")
+            raise ReportAccessDenied(ACCESS_CHECK_FAILED_MESSAGE) from e
+
+        plant_ids = values[0] if len(values) == 1 else None
+        if not isinstance(plant_ids, list) or not plant_ids:
+            logger.warning(
+                f"Access denied to report {report.id} for inspector {inspector!r}"
+            )
+            raise ReportAccessDenied(ACCESS_DENIED_MESSAGE)
+
+        return {**params, PLANT_IDS_PARAM: plant_ids}
 
     def _parse_enum_query_params(self, query_file: Path) -> List[str]:
         """Extract parameter names from enum query SQL file.
@@ -321,8 +337,13 @@ class RenderServiceImpl(RenderServiceInterface):
         current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """Get the current status and result of a report rendering."""
-        # Same params as executeRender so the cache key matches
+        # Same params and access check as executeRender: the cache key depends on
+        # them, and a cached file must not be reported to someone without access
         params = self._with_context(params, current_inspector_id)
+        try:
+            params = await self._check_access(repository.get_report(report_id), params)
+        except ReportAccessDenied as e:
+            return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
 
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
@@ -404,11 +425,10 @@ class RenderServiceImpl(RenderServiceInterface):
         params = self._with_context(params, current_inspector_id)
 
         # Access check runs before the cache lookup, so a cached file is never
-        # served to someone without access
+        # served to someone without access. It also adds :plant_ids for the SQL.
         try:
-            await self._check_access(repository.get_report(report_id), params)
-        except Exception as e:
-            logger.warning(f"Render of {report_id} rejected by access check: {e}")
+            params = await self._check_access(repository.get_report(report_id), params)
+        except ReportAccessDenied as e:
             return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
 
         # Calculate cache key
@@ -582,7 +602,7 @@ class RenderServiceImpl(RenderServiceInterface):
             logger.info(f"Loaded report: {report_id}")
 
             params = self._with_context(params, current_inspector_id)
-            await self._check_access(report, params)
+            params = await self._check_access(report, params)
 
             metadata = report.metadata
             output_format = metadata.format
