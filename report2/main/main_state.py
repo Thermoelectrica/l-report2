@@ -66,7 +66,9 @@ class State(AuthState):
             await ensure_services_initialized()
 
             self.selected_report_id = report_id
-            metadata = await render_service.getReportMetadata(report_id)
+            metadata = await render_service.getReportMetadata(
+                report_id, current_inspector_id=self._current_inspector_id()
+            )
 
             # Store metadata in separate fields
             self.selected_report_name = metadata.name
@@ -94,7 +96,9 @@ class State(AuthState):
             # }
 
             # Load parameter dependency graph from service
-            self.param_dependencies = await render_service.getParameterDependencies(report_id)
+            self.param_dependencies = await render_service.getParameterDependencies(
+                report_id, current_inspector_id=self._current_inspector_id()
+            )
             logger.info(f"Loaded parameter dependencies: {self.param_dependencies}")
 
             # Reset render state
@@ -140,7 +144,8 @@ class State(AuthState):
                     new_enum_values = await render_service.refreshEnumValues(
                         self.selected_report_id,
                         param_name,
-                        self.current_param_values
+                        self.current_param_values,
+                        current_inspector_id=self._current_inspector_id(),
                     )
 
                     # Update the parameter's enum values in state
@@ -220,6 +225,7 @@ class State(AuthState):
                 return
             report_id = self.selected_report_id
             typed_params = self._current_render_params
+            inspector_id = self._current_inspector_id()
 
         try:
             # Update status
@@ -228,7 +234,10 @@ class State(AuthState):
 
             # Execute render directly - no polling needed
             result = await render_service.executeRender(
-                report_id, typed_params, force_refresh=False
+                report_id,
+                typed_params,
+                force_refresh=False,
+                current_inspector_id=inspector_id,
             )
 
             # Update state with result

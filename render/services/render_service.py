@@ -7,7 +7,7 @@ import re
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, select
 
@@ -24,8 +24,20 @@ from .interface import RenderService as RenderServiceInterface
 from .renderer_registry import renderer_registry
 from .query_executor import query_executor
 from .repository import repository
+from .reserved_params import (
+    CURRENT_INSPECTOR_PARAM,
+    PLANT_IDS_PARAM,
+    RESERVED_PARAMS,
+)
 
 logger = logging.getLogger(__name__)
+
+ACCESS_DENIED_MESSAGE = "Нет доступа к отчёту с выбранными параметрами"
+ACCESS_CHECK_FAILED_MESSAGE = "Не удалось проверить доступ к отчёту"
+
+
+class ReportAccessDenied(PermissionError):
+    """Access to the report is denied (or could not be verified)."""
 
 
 class RenderServiceImpl(RenderServiceInterface):
@@ -62,6 +74,59 @@ class RenderServiceImpl(RenderServiceInterface):
         """Get list of all available reports."""
         return repository.list_reports()
 
+    @staticmethod
+    def _with_context(
+        params: Dict[str, Any], current_inspector_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """Return params with reserved engine params set server-side.
+
+        Any client-supplied reserved param (e.g. ``plant_ids``) is dropped, so it
+        can only come from the access_query. ``current_inspector_id`` is bound as
+        ``::integer``; None -> SQL NULL.
+        """
+        merged = {k: v for k, v in params.items() if k not in RESERVED_PARAMS}
+        merged[CURRENT_INSPECTOR_PARAM] = current_inspector_id
+        return merged
+
+    async def _check_access(
+        self, report: Any, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Run the report's access_query (if any) and return params for the report.
+
+        The access_query returns one row with one column: a non-empty array of
+        plant ids the inspector may read. It is added to the returned params as
+        ``plant_ids``, so main queries filter with ``plant_id = ANY(:plant_ids)``.
+
+        Fails closed: a missing file, no/several rows, an empty/NULL array or any
+        error raises ReportAccessDenied (errors are logged, not shown to users).
+        """
+        query_name = report.metadata.access_query
+        if not query_name:
+            return params
+
+        inspector = params.get(CURRENT_INSPECTOR_PARAM)
+        query_file = report.path / query_name
+        try:
+            if not query_file.exists():
+                raise FileNotFoundError(f"Access query file not found: {query_file}")
+            # First column of each row; one row expected
+            values = await query_executor.execute_enum_query(query_file, params)
+        except Exception as e:
+            logger.error(
+                f"Access check failed for report {report.id} (inspector {inspector!r}): {e}",
+                exc_info=True,
+            )
+            raise ReportAccessDenied(ACCESS_CHECK_FAILED_MESSAGE) from e
+
+        plant_ids = values[0] if len(values) == 1 else None
+        if not isinstance(plant_ids, list) or not plant_ids:
+            logger.warning(
+                f"Access denied to report {report.id} for inspector {inspector!r}"
+            )
+            raise ReportAccessDenied(ACCESS_DENIED_MESSAGE)
+
+        return {**params, PLANT_IDS_PARAM: plant_ids}
+
     def _parse_enum_query_params(self, query_file: Path) -> List[str]:
         """Extract parameter names from enum query SQL file.
         
@@ -79,8 +144,9 @@ class RenderServiceImpl(RenderServiceInterface):
             # Exclude PostgreSQL type casts (::type) by using negative lookbehind
             named_params = re.findall(r"(?<!:):(\w+)", query)
             
-            # Return unique parameter names
-            return list(set(named_params))
+            # Return unique parameter names (reserved context params are not
+            # report parameters and never trigger enum refreshes)
+            return list(set(named_params) - RESERVED_PARAMS)
         except Exception as e:
             logger.error(f"Failed to parse enum query file {query_file}: {e}")
             return []
@@ -95,7 +161,9 @@ class RenderServiceImpl(RenderServiceInterface):
         # Get appropriate generator
         return renderer_registry.get_generator(output_format)
 
-    async def getReportMetadata(self, report_id: str) -> ReportMetadata:
+    async def getReportMetadata(
+        self, report_id: str, current_inspector_id: Optional[int] = None
+    ) -> ReportMetadata:
         """Get detailed metadata for a specific report with resolved dynamic enums."""
         # Get base metadata from repository
         metadata = repository.get_metadata(report_id)
@@ -152,7 +220,8 @@ class RenderServiceImpl(RenderServiceInterface):
                     # Execute the enum query with initial parameter values
                     logger.info(f"Executing enum query from {query_file}")
                     enum_values = await query_executor.execute_enum_query(
-                        query_file, initial_params
+                        query_file,
+                        self._with_context(initial_params, current_inspector_id),
                     )
                     param.enum = enum_values
                     logger.info(
@@ -167,7 +236,9 @@ class RenderServiceImpl(RenderServiceInterface):
 
         return metadata_copy
 
-    async def getParameterDependencies(self, report_id: str) -> Dict[str, List[str]]:
+    async def getParameterDependencies(
+        self, report_id: str, current_inspector_id: Optional[int] = None
+    ) -> Dict[str, List[str]]:
         """Get dependency graph showing which parameters affect which enum queries.
         
         Args:
@@ -177,7 +248,7 @@ class RenderServiceImpl(RenderServiceInterface):
             Dictionary mapping parameter names to list of dependent parameter names
         """
         # Get metadata (which includes parsed enum_query_params)
-        metadata = await self.getReportMetadata(report_id)
+        metadata = await self.getReportMetadata(report_id, current_inspector_id)
         
         # Build reverse dependency mapping
         # Key: parameter that changes
@@ -198,7 +269,11 @@ class RenderServiceImpl(RenderServiceInterface):
         return dependencies
 
     async def refreshEnumValues(
-        self, report_id: str, param_name: str, current_params: Dict[str, Any]
+        self,
+        report_id: str,
+        param_name: str,
+        current_params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> List[Any]:
         """Refresh enum values for a specific parameter based on current parameter values.
         
@@ -242,7 +317,7 @@ class RenderServiceImpl(RenderServiceInterface):
                 f"Refreshing enum values for {param_name} with params: {current_params}"
             )
             enum_values = await query_executor.execute_enum_query(
-                query_file, current_params
+                query_file, self._with_context(current_params, current_inspector_id)
             )
             logger.info(
                 f"Refreshed {len(enum_values)} enum values for {param_name}: {enum_values[:5]}"
@@ -256,9 +331,20 @@ class RenderServiceImpl(RenderServiceInterface):
             return []
 
     async def getRenderStatus(
-        self, report_id: str, params: Dict[str, Any]
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """Get the current status and result of a report rendering."""
+        # Same params and access check as executeRender: the cache key depends on
+        # them, and a cached file must not be reported to someone without access
+        params = self._with_context(params, current_inspector_id)
+        try:
+            params = await self._check_access(repository.get_report(report_id), params)
+        except ReportAccessDenied as e:
+            return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
+
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
 
@@ -316,7 +402,11 @@ class RenderServiceImpl(RenderServiceInterface):
                 return RenderResult(status=RenderStatus.PENDING)
 
     async def executeRender(
-        self, report_id: str, params: Dict[str, Any], force_refresh: bool = False
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        force_refresh: bool = False,
+        current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """
         Execute complete render workflow and return the result.
@@ -325,10 +415,22 @@ class RenderServiceImpl(RenderServiceInterface):
             report_id: Report template ID
             params: User-provided parameters
             force_refresh: Whether to bypass cache
+            current_inspector_id: Logged-in inspector (JWT ``sub``); exposed to
+                SQL as :current_inspector_id and part of the cache key
 
         Returns:
             RenderResult with status COMPLETED or FAILED
         """
+        # Inject the inspector id: available to SQL, and makes the cache per-user
+        params = self._with_context(params, current_inspector_id)
+
+        # Access check runs before the cache lookup, so a cached file is never
+        # served to someone without access. It also adds :plant_ids for the SQL.
+        try:
+            params = await self._check_access(repository.get_report(report_id), params)
+        except ReportAccessDenied as e:
+            return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
+
         # Calculate cache key
         cache_key = self._calculate_hash(report_id, params)
 
@@ -469,7 +571,10 @@ class RenderServiceImpl(RenderServiceInterface):
                 return RenderResult(status=RenderStatus.FAILED, error_message=str(e))
 
     async def generatePreview(
-        self, report_id: str, params: Dict[str, Any]
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> str:
         """
         Generate HTML preview without converting to final format.
@@ -495,6 +600,9 @@ class RenderServiceImpl(RenderServiceInterface):
             # Get report
             report = repository.get_report(report_id)
             logger.info(f"Loaded report: {report_id}")
+
+            params = self._with_context(params, current_inspector_id)
+            params = await self._check_access(report, params)
 
             metadata = report.metadata
             output_format = metadata.format

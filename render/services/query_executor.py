@@ -11,6 +11,7 @@ import asyncpg
 from ..config import settings
 from ..models import ParameterType
 from .repository import Report
+from .reserved_params import RESERVED_PARAM_CASTS
 
 logger = logging.getLogger(__name__)
 
@@ -196,16 +197,19 @@ class QueryExecutor:
 
         return value
 
-    def _get_pg_type_cast(self, param_def: Any) -> str:
+    def _get_pg_type_cast(self, param_def: Any, param_name: str | None = None) -> str:
         """
         Return a PostgreSQL type cast string for a parameter definition.
 
         Args:
             param_def: Parameter definition from metadata (may be None)
+            param_name: Parameter name; reserved engine params have fixed types
 
         Returns:
             PostgreSQL cast suffix, e.g. '::text', '::integer', or '::text' as fallback
         """
+        if param_name in RESERVED_PARAM_CASTS:
+            return RESERVED_PARAM_CASTS[param_name]
         if param_def is None:
             return "::text"
         type_cast_map = {
@@ -290,7 +294,7 @@ class QueryExecutor:
         # produce a double cast like "$1::text::text".
         converted_query = query
         for param_name, (position, param_def) in param_mapping.items():
-            type_cast = self._get_pg_type_cast(param_def)
+            type_cast = self._get_pg_type_cast(param_def, param_name)
             # The optional group (?:::\w[\w\s,()]*(?<!\s))? consumes an
             # existing ::cast that immediately follows the named parameter.
             converted_query = re.sub(

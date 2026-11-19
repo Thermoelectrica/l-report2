@@ -100,6 +100,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", {"param": "value"})
 
@@ -112,7 +113,9 @@ class TestRenderServiceImpl:
         """Test getting status for running render."""
         service = RenderServiceImpl()
         params = {"test": "value"}
-        cache_key = service._calculate_hash("test-report", params)
+        cache_key = service._calculate_hash(
+            "test-report", service._with_context(params, None)
+        )
 
         # Create running render
         render = Render(
@@ -136,6 +139,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -146,7 +150,9 @@ class TestRenderServiceImpl:
         """Test getting status for failed render."""
         service = RenderServiceImpl()
         params = {"test": "value"}
-        cache_key = service._calculate_hash("test-report", params)
+        cache_key = service._calculate_hash(
+            "test-report", service._with_context(params, None)
+        )
         error_msg = "Database connection failed"
 
         # Create failed render
@@ -172,6 +178,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -185,7 +192,9 @@ class TestRenderServiceImpl:
         """Test getting status for completed render with valid cache."""
         service = RenderServiceImpl(cache_ttl_minutes=1440)  # 24 hours
         params = {"test": "value"}
-        cache_key = service._calculate_hash("test-report", params)
+        cache_key = service._calculate_hash(
+            "test-report", service._with_context(params, None)
+        )
 
         # Create completed render (recent)
         render = Render(
@@ -219,6 +228,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.renderer_registry") as mock_registry:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
             mock_registry.get_generator.return_value = mock_generator
             service.storage = mock_storage
 
@@ -233,7 +243,9 @@ class TestRenderServiceImpl:
         """Test getting status for completed render with expired cache."""
         service = RenderServiceImpl(cache_ttl_minutes=1440)  # 24 hours
         params = {"test": "value"}
-        cache_key = service._calculate_hash("test-report", params)
+        cache_key = service._calculate_hash(
+            "test-report", service._with_context(params, None)
+        )
 
         # Create completed render (old)
         old_time = datetime.utcnow() - timedelta(minutes=1500)  # 25 hours ago
@@ -259,6 +271,7 @@ class TestRenderServiceImpl:
              patch("render.services.render_service.repository") as mock_repo:
             mock_session.return_value.__aenter__.return_value = db_session
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
 
             result = await service.getRenderStatus("test-report", params)
 
@@ -291,12 +304,14 @@ class TestRenderServiceIntegration:
             mock_report.path = MagicMock()
             mock_report.metadata = MagicMock()
             mock_report.metadata.format = "weasyprint"
+            mock_report.metadata.access_query = None
             mock_repo.get_report.return_value = mock_report
             
             # Mock metadata with cache_ttl_minutes
             mock_metadata = MagicMock()
             mock_metadata.cache_ttl_minutes = None  # Use default
             mock_repo.get_metadata.return_value = mock_metadata
+            mock_repo.get_report.return_value.metadata.access_query = None  # no access check
             
             # Mock generator
             mock_generator = MagicMock()

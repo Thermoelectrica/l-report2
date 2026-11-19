@@ -8,6 +8,7 @@ import yaml
 
 from ..config import settings
 from ..models import ParameterType, ReportListItem, ReportMetadata, ReportParameter
+from .reserved_params import RESERVED_PARAMS
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,11 @@ class ReportRepository:
         # Parse parameters
         parameters = []
         for param in metadata_dict.get("parameters", []):
+            if param["name"] in RESERVED_PARAMS:
+                raise ValueError(
+                    f"Parameter name '{param['name']}' in {report_dir.name} is reserved "
+                    f"by the engine: {sorted(RESERVED_PARAMS)}"
+                )
             parameters.append(
                 ReportParameter(
                     name=param["name"],
@@ -106,6 +112,7 @@ class ReportRepository:
             timeout=metadata_dict.get("timeout"),
             cache_ttl_minutes=metadata_dict.get("cache_ttl_minutes"),
             parameters=parameters,
+            access_query=metadata_dict.get("access_query"),
         )
 
         return Report(report_dir, metadata)
