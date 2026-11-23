@@ -51,6 +51,8 @@ class XlsxWorkControl(ReportRenderer):
             ("Ко-во рабочих дней", 20, "Сумма дней"),
             ("Среднее время в день, ч.", 20, "Время:"),
             ("Общее кол-во установленных ТИ, шт.", 20, "ТИ (шт.):"),
+            ("Количество охваченных контрольных точек", 20, "КТ (шт.):"),
+            ("Количество завершенных осмотров", 20, "Осмотры (шт.):"),
             ("Просроченные отчеты", 20, ""),
             ("Кол-во ошибок", 20, ""),
             ("Объекты", 40, "Объект:")
@@ -101,6 +103,9 @@ class XlsxWorkControl(ReportRenderer):
         if key == "ТИ (шт.):":
             values = obj.get("ТИ (шт.):") or []
             return str(sum(int(i) for i in values if i))
+        if key in ("КТ (шт.):", "Осмотры (шт.):"):
+            values = obj.get(key) or []
+            return sum(int(i) for i in values if i)
         if key == "Объект:":
             plants = list(set(obj.get("Объект:") or []))
             if len(plants) > 1:
@@ -161,6 +166,31 @@ class XlsxWorkControl(ReportRenderer):
             ["Ошибки:", ""],
         ]
         return len(value), value
+
+    def get_inspection_stats(self, col_data: dict, idx: int) -> list[list[str]]:
+        """Возвращает данные по осмотрам для аналитической справки.
+
+        В лист учета работы не выводятся, только накапливаются в справке.
+        """
+        enable = (
+            col_data.get("work_hours")
+            and col_data["work_hours"][idx] is not None
+        )
+        control_points = (col_data.get("control_points") or [])[idx:idx + 1]
+        inspections = (col_data.get("completed_inspections") or [])[idx:idx + 1]
+        return [
+            ["КТ (шт.):", f"{control_points[0] or 0}" if enable and control_points else "0"],
+            ["Осмотры (шт.):", f"{inspections[0] or 0}" if enable and inspections else "0"],
+        ]
+
+    def fill_inspection_stats(
+        self, full_name: str, col_data: dict, idx: int, col_idx: int, counter: int
+    ) -> None:
+        """Накапливает данные по осмотрам один раз на день инспектора."""
+        if counter != 0:
+            return
+        for item in self.get_inspection_stats(col_data, idx):
+            self.fill_summary_analytics(full_name, item, col_idx)
 
     def fill_summary_analytics(self, full_name: str, value: list[str], col_idx: int) -> None:
         """Накапливает данные для аналитической справки по инспектору."""
@@ -287,6 +317,11 @@ class XlsxWorkControl(ReportRenderer):
                                 ):
                                     query_obj[elem][idx1] += query_obj[elem][idx2]
                                 del query_obj[elem][idx2]
+                            # Статистика осмотров считается в SQL по инспектору за день,
+                            # поэтому у дубликатов она одинаковая и не суммируется
+                            for elem in ["control_points", "completed_inspections"]:
+                                if elem in query_obj:
+                                    del query_obj[elem][idx2]
 
             # Задваиваем каждый элемент
             doubled = [
@@ -368,6 +403,9 @@ class XlsxWorkControl(ReportRenderer):
                                 value=value[counter][pos]
                             )
                             self.fill_summary_analytics(row_data["full_name"], value[counter], col_idx)
+                            self.fill_inspection_stats(
+                                row_data["full_name"], col_data, idx_major, col_idx, counter
+                            )
                         except ValueError:
                             success = False
                             for idx, elem in enumerate(col_data["full_names_minor"]):
@@ -383,6 +421,9 @@ class XlsxWorkControl(ReportRenderer):
                                         value=value[counter][pos]
                                     )
                                     self.fill_summary_analytics(row_data["full_name"], value[counter], col_idx)
+                                    self.fill_inspection_stats(
+                                        row_data["full_name"], col_data, idx, col_idx, counter
+                                    )
                                     success = True
                                     break
                                 except ValueError:
