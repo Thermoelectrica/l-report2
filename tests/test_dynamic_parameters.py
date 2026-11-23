@@ -335,7 +335,8 @@ class TestRefreshEnumValues:
             assert enum_values == ["users", "orders", "products"]
             mock_query_executor.execute_enum_query.assert_called_once()
             call_args = mock_query_executor.execute_enum_query.call_args
-            assert call_args[0][1] == current_params  # Verify parameters were passed
+            # Verify parameters were passed (plus the reserved context param)
+            assert call_args[0][1] == {**current_params, "current_inspector_id": None}
     
     @pytest.mark.asyncio
     async def test_refresh_nonexistent_parameter(self, mock_query_executor, mock_repository, sample_report_path):

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..models import RenderResult, ReportListItem, ReportMetadata
 
@@ -39,7 +39,9 @@ class RenderService(ABC):
         pass
 
     @abstractmethod
-    async def getReportMetadata(self, report_id: str) -> ReportMetadata:
+    async def getReportMetadata(
+        self, report_id: str, current_inspector_id: Optional[int] = None
+    ) -> ReportMetadata:
         """Get detailed metadata for a specific report.
 
         Provides comprehensive information about a report including its parameters,
@@ -67,7 +69,11 @@ class RenderService(ABC):
 
     @abstractmethod
     async def executeRender(
-        self, report_id: str, params: Dict[str, Any], force_refresh: bool = False
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        force_refresh: bool = False,
+        current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """Execute complete render workflow and return the result.
 
@@ -110,7 +116,10 @@ class RenderService(ABC):
 
     @abstractmethod
     async def getRenderStatus(
-        self, report_id: str, params: Dict[str, Any]
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> RenderResult:
         """Get the current status and result of a report rendering.
 
@@ -147,7 +156,9 @@ class RenderService(ABC):
         pass
 
     @abstractmethod
-    async def getParameterDependencies(self, report_id: str) -> Dict[str, List[str]]:
+    async def getParameterDependencies(
+        self, report_id: str, current_inspector_id: Optional[int] = None
+    ) -> Dict[str, List[str]]:
         """Get dependency graph showing which parameters affect which enum queries.
 
         Analyzes enum_query SQL files to determine which parameters are used in each
@@ -174,7 +185,11 @@ class RenderService(ABC):
 
     @abstractmethod
     async def refreshEnumValues(
-        self, report_id: str, param_name: str, current_params: Dict[str, Any]
+        self,
+        report_id: str,
+        param_name: str,
+        current_params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> List[Any]:
         """Refresh enum values for a specific parameter based on current parameter values.
 
@@ -208,7 +223,10 @@ class RenderService(ABC):
 
     @abstractmethod
     async def generatePreview(
-        self, report_id: str, params: Dict[str, Any]
+        self,
+        report_id: str,
+        params: Dict[str, Any],
+        current_inspector_id: Optional[int] = None,
     ) -> str:
         """Generate HTML preview without converting to final format.
 

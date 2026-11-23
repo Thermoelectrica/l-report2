@@ -8,6 +8,7 @@ import reflex as rx
 from render import render_service
 from render.models import ReportParameter, ParameterType
 from report2.services import ensure_services_initialized, logger
+from report2.auth.auth_state import AuthState
 
 
 class PreviewState(rx.State):
@@ -55,8 +56,15 @@ class PreviewState(rx.State):
             params_dict_str = json.loads(params_json)
             self.parameters_dict = params_dict_str
 
+            # Inspector from the auth cookie: the access check in the render
+            # service relies on it (params in the URL are user-controlled)
+            auth = await self.get_state(AuthState)
+            inspector_id = auth._current_inspector_id()
+
             # Get report metadata for name and parameter types
-            metadata = await render_service.getReportMetadata(report_id)
+            metadata = await render_service.getReportMetadata(
+                report_id, current_inspector_id=inspector_id
+            )
             self.report_name = metadata.name
 
             # Convert string parameters back to proper types
@@ -64,7 +72,7 @@ class PreviewState(rx.State):
 
             # Generate preview with typed parameters
             html_content = await render_service.generatePreview(
-                report_id, typed_params
+                report_id, typed_params, current_inspector_id=inspector_id
             )
 
             self.preview_html = html_content
