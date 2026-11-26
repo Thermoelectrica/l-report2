@@ -127,7 +127,8 @@ class DocxTplRenderer(ReportRenderer):
                     "БКС (Cu)"  #
                 ] and max_temp >= 110 or
                 row["defect_type_short_name"] == "Каб. нак. (ПВХ)" and max_temp >= 95 or
-                row["is_test_ready"] and t_anomaly >= 15
+                row["is_test_ready"] and t_anomaly >= 15 or
+                row.get("is_attention_required") is True  # требует внимания -> высокий риск
             ):
                 group_label = "Дефекты электродвигателей с высоким риском отказа."
                 output_text = (
