@@ -214,7 +214,10 @@ class DocxTplRenderer(ReportRenderer):
                 row["equipment_type_name"] == "Ячейка КРУ 6-10 кВ" and max_excess >= 80 or
                 row["is_attention_required"] is True or
                 (delta_t + 40 - t_max) > 150 or
-                is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0) or # п.1_2 шаблона
+                # п.1_2 шаблона: тепловизор превышает норму, а ТИН нет.
+                # Применяется только при наличии ТИН: без наклейки t_sticker = 0,
+                # delta_t_b всегда < 0 и любое превышение по тепловизору давало бы 1-ю группу
+                t_sticker != 0 and is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0) or
                 current06_cond and (excess_temp_to_current + 40 - t_max) > 150 or
                 current03_cond and (excess_temp_to_half_current - 30) > 200 or
                 current00_cond and not is_condition_one and delta_t >= 30 or  # п.3_2 шаблона
@@ -228,7 +231,7 @@ class DocxTplRenderer(ReportRenderer):
                         f" DEBUG1_2: {row.get('equipment_type_name') == 'Ячейка КРУ 6-10 кВ' and max_excess >= 80}"
                         f" DEBUG1_3: {row.get('is_attention_required') is True}"
                         f" DEBUG1_4: {(delta_t + 40 - t_max) > 150}"
-                        f" DEBUG1_5: {is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0)}"
+                        f" DEBUG1_5: {t_sticker != 0 and is_condition_zero and is_condition_one and (delta_t_a >= 0 and delta_t_b < 0)}"
                         f" DEBUG1_6: {current06_cond and (excess_temp_to_current + 40 - t_max) > 150}"
                         f" DEBUG1_7: {current03_cond and (excess_temp_to_half_current - 30) > 200}"
                         f" DEBUG1_8: {current00_cond and not is_condition_one and delta_t >= 30}"
