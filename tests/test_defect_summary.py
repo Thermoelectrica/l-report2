@@ -19,6 +19,21 @@ all_combinations = [
         "is_test_ready": True,
         "defect_weight": 5,
     },
+    # ─── MOTOR + требует внимания -> высокий риск (weight=4) ─────
+    {
+        "id": 101,
+        "is_panel": "MOTOR",
+        "defect_type_short_name": "Качение",
+        "t_sticker": None,
+        "t_sticker_min": 0,
+        "t_max": 70,
+        "t_observed": 30.0,
+        "t_environment": 25.0,
+        "t_similar_unit": 0,
+        "is_test_ready": True,
+        "is_attention_required": True,
+        "defect_weight": 4,
+    },
     # ----- реальный кейс (падает, надо править методику) ------------
     {
         "id": 100,
