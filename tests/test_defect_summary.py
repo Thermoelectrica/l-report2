@@ -34,6 +34,25 @@ all_combinations = [
         "is_attention_required": True,
         "defect_weight": 4,
     },
+    # ─── PANEL без ТИН, превышение по тепловизору 2° -> 2-я группа ─
+    {
+        "id": 102,
+        "is_panel": "PANEL",
+        "equipment_type_name": "Щит 0,4 кВ ВПУ",
+        "t_sticker": None,
+        "t_sticker_min": None,
+        "is_sticker_present": False,
+        "t_max": 75,
+        "t_excess": 35,
+        "t_observed": 77.0,
+        "t_environment": 25.0,
+        "t_similar_unit": None,
+        "nominal_current": 1600.0,
+        "measured_current": None,
+        "is_test_ready": True,
+        "is_attention_required": False,
+        "defect_weight": 2,
+    },
     # ----- реальный кейс (падает, надо править методику) ------------
     {
         "id": 100,
